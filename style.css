@@ -1,0 +1,104 @@
+/* 《天启之路》占位框架样式：全部为色块+文字占位，后续替换正式UI */
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:#1a1f16;overflow:hidden;font-family:"Microsoft YaHei","PingFang SC",sans-serif;user-select:none}
+body{display:flex;align-items:center;justify-content:center}
+
+/* 9:16 竖屏容器 */
+#app{position:relative;width:min(100vw,56.25vh);height:min(100vh,177.78vw);overflow:hidden;background:#79b356}
+#game-canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+
+/* ---------- 通用 ---------- */
+.hidden{display:none!important}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+#toast{position:absolute;bottom:26%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.78);color:#fff;padding:9px 18px;border-radius:10px;font-size:14px;z-index:50;pointer-events:none;max-width:86%;text-align:center}
+
+/* ---------- 主页 UI ---------- */
+#home-ui{position:absolute;inset:0;z-index:10;pointer-events:none;transition:opacity .6s ease,transform .6s ease}
+#home-ui>*{pointer-events:auto}
+#home-ui.fade-out{opacity:0;transform:translateY(-3%)}
+
+#home-top{position:absolute;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;align-items:flex-start}
+.ui-block{background:rgba(255,255,255,.85);border:2px solid #333;border-radius:10px;padding:6px 10px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
+.avatar-block{width:40px;height:40px;background:#9e9e9e;border:2px solid #555;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff}
+#home-top-right{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+
+.home-edge{position:absolute;top:22%;display:flex;flex-direction:column;gap:12px}
+#home-left{left:8px}
+#home-right{right:8px}
+.edge-btn{writing-mode:vertical-lr;letter-spacing:5px;padding:14px 8px;background:rgba(255,255,255,.85);border:2px solid #333;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer}
+.edge-btn:active{transform:scale(.94)}
+
+#home-bottom{position:absolute;bottom:15%;left:0;right:0;display:flex;justify-content:center;gap:12px}
+.big-block{width:23%;padding:14px 0;background:rgba(255,255,255,.85);border:2px solid #333;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer}
+.big-block:active{transform:scale(.95)}
+
+#btn-start{position:absolute;left:50%;transform:translateX(-50%);bottom:4.5%;width:48%;padding:16px 0;font-size:22px;font-weight:800;color:#fff;background:#ff7043;border:3px solid #8c2f00;border-radius:40px;cursor:pointer;box-shadow:0 6px 0 #a3401c;letter-spacing:6px}
+#btn-start:active{transform:translateX(-50%) translateY(4px);box-shadow:0 2px 0 #a3401c}
+#home-hint{position:absolute;bottom:1%;width:100%;text-align:center;font-size:11px;color:rgba(255,255,255,.92);text-shadow:0 1px 2px rgba(0,0,0,.5)}
+
+/* ---------- 游戏 HUD ---------- */
+#game-ui{position:absolute;inset:0;z-index:10;pointer-events:none;animation:fadeIn .6s}
+#hud-top{position:absolute;top:10px;left:10px;right:10px;display:flex;gap:8px;align-items:center}
+.hud-block{background:rgba(255,255,255,.85);border:2px solid #333;border-radius:10px;padding:5px 10px;font-size:14px;font-weight:700;pointer-events:auto}
+#btn-pause{margin-left:auto;cursor:pointer;background:#ffd54f}
+#hud-bars{position:absolute;top:56px;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:6px}
+.bar{position:relative;width:72%;height:20px;background:rgba(0,0,0,.55);border:2px solid #fff;border-radius:10px;overflow:hidden}
+.bar>div{position:absolute;left:0;top:0;bottom:0;width:100%}
+.bar span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;text-shadow:0 1px 2px #000}
+.bar.hp #hp-fill{background:#e04b3f}
+.bar.xp #xp-fill{background:#3f8fe0}
+#shield-bar-wrap{display:flex;justify-content:center;width:100%}
+.bar.shield{width:52%;height:14px;border-color:#b2ebf2}
+.bar.shield #shield-fill{background:#4dd0e1}
+#boss-bar-wrap{position:absolute;top:108px;left:0;right:0;display:flex;justify-content:center}
+.bar.boss{width:86%;height:24px;border-color:#ff8a80}
+.bar.boss #boss-fill{background:#c62828}
+
+/* ---------- 弹层通用 ---------- */
+.modal{position:absolute;inset:0;background:rgba(0,0,0,.55);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:30;padding:16px}
+.modal-title{font-size:24px;font-weight:800;color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.6)}
+.modal-tip{font-size:12px;color:rgba(255,255,255,.78);text-align:center;line-height:1.5;max-width:92%}
+.panel-btn{width:60%;max-width:300px;padding:12px;font-size:17px;border-radius:12px;border:3px solid #b3541e;background:#ff8a3d;color:#fff;font-weight:700;cursor:pointer}
+.panel-btn:active{transform:scale(.97)}
+.panel-btn.ghost{background:rgba(0,0,0,.25);color:#fff;border-color:#fff}
+
+/* ---------- 天启之力卡片：v0.1三列竖版卡（防长条：小字+限行） ---------- */
+#card-choices{display:flex;gap:10px;width:94%}
+.card{flex:1;background:#fdfdf8;border-radius:14px;border:3px solid #999;padding:9px 7px;display:flex;flex-direction:column;gap:5px;min-height:170px;max-height:290px;overflow:hidden;cursor:pointer;box-shadow:0 6px 16px rgba(0,0,0,.35);transition:transform .12s}
+.card:active{transform:scale(.96)}
+.card-head{font-size:16px;font-weight:700;text-align:center;padding:4px 2px;border-radius:8px;color:#fff;white-space:nowrap}
+.card-sub{font-size:10.5px;color:#777;text-align:center;line-height:1.35}
+.card-desc{font-size:12px;line-height:1.4;color:#333;flex:1;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
+.card-next{font-size:10.5px;line-height:1.35;color:#7a5c1e;background:#fff3d6;border-radius:6px;padding:3px 5px}
+.card.core{border-color:#ff9800}.card.core .card-head{background:#ff9800}
+.card.growth{border-color:#58c24a}.card.growth .card-head{background:#58c24a}
+.card.ult{border-color:#b06ae0}.card.ult .card-head{background:#b06ae0}
+.card.generic{border-color:#b9bec4}.card.generic .card-head{background:#b9bec4}
+
+/* ---------- 天启之姿选择 ---------- */
+#pose-choices{display:flex;gap:10px;width:94%}
+.pose-btn{flex:1;background:#fff;border:3px solid #999;border-radius:14px;padding:14px 10px;display:flex;flex-direction:column;gap:8px;cursor:pointer;align-items:center}
+.pose-btn.active{outline:4px solid #ffb300;background:#fffbe8}
+.pose-name{font-size:20px;font-weight:800}
+.pose-desc{font-size:13px;color:#555;line-height:1.5}
+.pose-schools{font-size:12px;color:#8a6d3b;background:#fff8e6;border-radius:6px;padding:4px 6px;text-align:center}
+
+/* ---------- 测试悬浮球（正式包移除） ---------- */
+#debug-ball{position:absolute;right:12px;top:34%;width:54px;height:54px;border-radius:50%;background:rgba(33,33,33,.82);color:#ffd54f;border:2px dashed #ffd54f;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;z-index:60;cursor:pointer;opacity:.8;touch-action:none;user-select:none}
+#debug-panel{position:absolute;right:10px;top:calc(34% + 62px);width:46%;max-width:220px;background:rgba(20,20,20,.92);border:2px solid #ffd54f;border-radius:12px;padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;z-index:60}
+.dbg-btn{padding:8px 4px;font-size:13px;font-weight:700;background:#333;color:#ffe082;border:1px solid #ffd54f;border-radius:8px;cursor:pointer}
+.dbg-btn:active{background:#555}
+
+/* ---------- 暂停-已选天启之力 ---------- */
+#pause-cards{width:82%;max-width:360px;background:rgba(255,255,255,.92);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+#pause-cards .pc-title{font-size:14px;font-weight:800;color:#555}
+#pause-cards .pc-list{display:flex;flex-wrap:wrap;gap:6px}
+#pause-cards .pc-chip{font-size:12px;background:#fff3d6;color:#7a5c1e;border:1px solid #e6c877;border-radius:8px;padding:3px 8px}
+#pause-cards .pc-none{font-size:13px;color:#999}
+
+/* ---------- 结算 ---------- */
+#settle-stats{display:flex;flex-direction:column;gap:8px;width:80%;max-width:340px;background:rgba(255,255,255,.92);border-radius:12px;padding:14px}
+.stat{display:flex;justify-content:space-between;font-size:15px;color:#555}
+.stat b{color:#222}
+.stat.cards{flex-direction:column;gap:4px}
+.stat.cards b{font-size:13px;line-height:1.6;text-align:left;font-weight:400}

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>天启之路 · 占位框架原型</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="game-canvas"></canvas>
+
+  <!-- ===== 主页 UI 层（占位色块） ===== -->
+  <div id="home-ui">
+    <div id="home-top">
+      <div class="ui-block" id="player-badge">
+        <div class="avatar-block">头像</div>
+        <span>游客0010001</span>
+      </div>
+      <div id="home-top-right">
+        <div class="ui-block">金币 999+</div>
+        <div class="ui-block">体力 12/100</div>
+      </div>
+    </div>
+
+    <div id="home-left" class="home-edge">
+      <button class="edge-btn" id="btn-pose">天启之姿</button>
+      <button class="edge-btn" id="btn-map">地图关卡</button>
+    </div>
+    <div id="home-right" class="home-edge">
+      <button class="edge-btn" data-todo>活动</button>
+      <button class="edge-btn" data-todo>互动</button>
+      <button class="edge-btn" data-todo>排行</button>
+    </div>
+
+    <div id="home-bottom">
+      <button class="big-block" data-todo>背包</button>
+      <button class="big-block" data-todo>图鉴</button>
+      <button class="big-block" data-todo>商城</button>
+    </div>
+
+    <button id="btn-start">踏入征程</button>
+    <div id="home-hint">占位框架：三姿态×六流派（战力系统v0.1），色块与文字后续替换正式美术</div>
+  </div>
+
+  <!-- ===== 游戏 HUD 层 ===== -->
+  <div id="game-ui" class="hidden">
+    <div id="hud-top">
+      <div class="hud-block" id="hud-pose">战士</div>
+      <div class="hud-block" id="hud-timer">00:00</div>
+      <div class="hud-block" id="hud-kills">击杀 0</div>
+      <button class="hud-block" id="btn-pause">暂停</button>
+    </div>
+    <div id="hud-bars">
+      <div id="shield-bar-wrap" class="hidden">
+        <div class="bar shield"><div id="shield-fill"></div><span id="shield-text">盾 0/0</span></div>
+      </div>
+      <div class="bar hp"><div id="hp-fill"></div><span id="hp-text">100/100</span></div>
+      <div class="bar xp"><div id="xp-fill"></div><span id="xp-text">Lv.1</span></div>
+    </div>
+    <div id="boss-bar-wrap" class="hidden">
+      <div class="bar boss"><div id="boss-fill"></div><span id="boss-text">最终怪物</span></div>
+    </div>
+  </div>
+
+  <!-- ===== 天启之力 三选一 ===== -->
+  <div id="card-modal" class="modal hidden">
+    <div class="modal-title">天启之力</div>
+    <div id="card-choices"></div>
+    <div class="modal-tip">首次必出两流派核心 · 成长卡重复选择升星 · 核心三星+两张二星成长后解锁终极进化（获得方式为占位方案，待确认）</div>
+  </div>
+
+  <!-- ===== 暂停 ===== -->
+  <div id="pause-modal" class="modal hidden">
+    <div class="modal-title">暂停</div>
+    <div id="pause-cards"></div>
+    <button class="panel-btn" id="btn-resume">继续征程</button>
+    <button class="panel-btn ghost" id="btn-giveup">放弃并返回主页</button>
+  </div>
+
+  <!-- ===== 结算 ===== -->
+  <div id="settle-modal" class="modal hidden">
+    <div class="modal-title" id="settle-title">关卡结算</div>
+    <div id="settle-stats"></div>
+    <button class="panel-btn" id="btn-retry">再次挑战</button>
+    <button class="panel-btn ghost" id="btn-home">返回主页</button>
+  </div>
+
+  <!-- ===== 天启之姿选择 ===== -->
+  <div id="pose-modal" class="modal hidden">
+    <div class="modal-title">天启之姿</div>
+    <div id="pose-choices"></div>
+    <div class="modal-tip">每姿两条流派，进关后的首次三选一必出两个流派核心，选其一决定本关流派（核心互斥）</div>
+    <button class="panel-btn" id="btn-pose-close">确认</button>
+  </div>
+
+  <!-- ===== 地图关卡（占位） ===== -->
+  <div id="map-modal" class="modal hidden">
+    <div class="modal-title">地图关卡（占位）</div>
+    <button class="panel-btn" id="btn-level1">第 1 关 · 启程之地</button>
+    <div class="modal-tip">关卡数量、解锁与难度规则待定</div>
+    <button class="panel-btn ghost" id="btn-map-close">关闭</button>
+  </div>
+
+  <div id="toast" class="hidden"></div>
+
+  <!-- ===== 测试悬浮球（正式包移除） ===== -->
+  <div id="debug-ball">调试</div>
+  <div id="debug-panel" class="hidden">
+    <button class="dbg-btn" data-dbg="speed">倍速 ×1</button>
+    <button class="dbg-btn" data-dbg="level">升级</button>
+    <button class="dbg-btn" data-dbg="inv">无敌 关</button>
+    <button class="dbg-btn" data-dbg="summon">召唤小怪</button>
+    <button class="dbg-btn" data-dbg="elite">召唤精英</button>
+    <button class="dbg-btn" data-dbg="boss">召唤最终怪物</button>
+    <button class="dbg-btn" data-dbg="clear">清屏秒杀</button>
+    <button class="dbg-btn" data-dbg="killboss">秒杀最终怪物</button>
+  </div>
+</div>
+<script src="js/config.js"></script>
+<script src="js/cards.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/world.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
