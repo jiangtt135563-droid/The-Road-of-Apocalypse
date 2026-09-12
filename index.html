@@ -40,13 +40,14 @@
     </div>
 
     <button id="btn-start">踏入征程</button>
-    <div id="home-hint">占位框架：三姿态×六流派（战力系统v0.1），色块与文字后续替换正式美术</div>
+    <div id="home-hint">v0.2 占位框架：摄像机大地图 / 4主题地图×3关 / 月牙剑气 / 六流派，美术后续替换</div>
   </div>
 
   <!-- ===== 游戏 HUD 层 ===== -->
   <div id="game-ui" class="hidden">
     <div id="hud-top">
       <div class="hud-block" id="hud-pose">战士</div>
+      <div class="hud-block" id="hud-map">草原 1</div>
       <div class="hud-block" id="hud-timer">00:00</div>
       <div class="hud-block" id="hud-kills">击杀 0</div>
       <button class="hud-block" id="btn-pause">暂停</button>
@@ -57,9 +58,7 @@
       </div>
       <div class="bar hp"><div id="hp-fill"></div><span id="hp-text">100/100</span></div>
       <div class="bar xp"><div id="xp-fill"></div><span id="xp-text">Lv.1</span></div>
-    </div>
-    <div id="boss-bar-wrap" class="hidden">
-      <div class="bar boss"><div id="boss-fill"></div><span id="boss-text">最终怪物</span></div>
+      <div class="bar boss hidden" id="boss-bar"><div id="boss-fill"></div><span id="boss-text">最终怪物</span></div>
     </div>
   </div>
 
@@ -82,6 +81,7 @@
   <div id="settle-modal" class="modal hidden">
     <div class="modal-title" id="settle-title">关卡结算</div>
     <div id="settle-stats"></div>
+    <button class="panel-btn hidden" id="btn-next">下一关 ▶</button>
     <button class="panel-btn" id="btn-retry">再次挑战</button>
     <button class="panel-btn ghost" id="btn-home">返回主页</button>
   </div>
@@ -94,11 +94,11 @@
     <button class="panel-btn" id="btn-pose-close">确认</button>
   </div>
 
-  <!-- ===== 地图关卡（占位） ===== -->
+  <!-- ===== 地图关卡（占位：4图×3关） ===== -->
   <div id="map-modal" class="modal hidden">
-    <div class="modal-title">地图关卡（占位）</div>
-    <button class="panel-btn" id="btn-level1">第 1 关 · 启程之地</button>
-    <div class="modal-tip">关卡数量、解锁与难度规则待定</div>
+    <div class="modal-title">地图关卡</div>
+    <div id="map-list"></div>
+    <div class="modal-tip">怪物强度随地图与关卡成长；全部开放中（解锁规则待定）</div>
     <button class="panel-btn ghost" id="btn-map-close">关闭</button>
   </div>
 

@@ -1,5 +1,6 @@
 // world.js —— 战斗世界：主页挂机演示与正式关卡共用同一套逻辑与画面（无缝转场的基础）
-// v0.2：接入六流派生成逻辑（剑气/铳弹/陨石/法弹）、巫师附魔、蛊爆、病蔓传播、冲击波。
+// v0.2：大地图+摄像机跟随（主角保持屏幕中心，看起来是地图在动）、地图有可见边界、
+//       按镜头视野刷怪、4张主题地图调色板、关卡强度成长。
 (function () {
   const W = CONFIG.DESIGN_W, H = CONFIG.DESIGN_H;
   const L = CONFIG.level, IDLE = CONFIG.idle;
@@ -18,13 +19,24 @@
       this.spawnTimer = 0; this.idleRespawn = 0; this.sinceElite = 0;
       this.bossSpawned = false; this.boss = null;
       this.onLevelUp = null; this.onEnd = null;
+      this.mapKey = CONFIG.maps[0].key;   // 当前地图
+      this.levelIdx = 0;                  // 当前关（0起）
+      this.cam = { x: 0, y: 0 };
+      this.debugInvincible = false;
       this.reset('idle');
     }
 
+    get map() { return CONFIG.maps.find(m => m.key === this.mapKey) || CONFIG.maps[0]; }
+    bossTime() { return L.bossTime + this.levelIdx * 8; }
+
     reset(mode) {
       this.mode = mode;
+      // 正式关卡：大世界（有边界）；主页挂机：单屏
+      if (mode === 'play') { this.worldW = 2200; this.worldH = 2200; }
+      else { this.worldW = W; this.worldH = H; }
       if (!this.player) this.player = new Player(CONFIG.defaultPose);
       this.player.resetRun();
+      this.player.x = this.worldW / 2; this.player.y = this.worldH / 2;
       this.monsters.length = 0; this.arrows.length = 0; this.qis.length = 0;
       this.spells.length = 0; this.gems.length = 0; this.floats.length = 0;
       this.time = 0; this.kills = 0; this.sinceElite = 0;
@@ -32,8 +44,16 @@
       this.over = false; this.paused = false;
       this.spawnTimer = mode === 'play' ? 0.4 : 0;
       this.idleRespawn = 0;
-      this.decor = genDecor(Math.floor(Math.random() * 1e9));
+      this.decor = genDecor(this.map.palette, this.worldW, this.worldH);
+      this.updateCam();
       if (mode === 'idle') for (let i = 0; i < IDLE.maxMonsters; i++) this.spawnMonster('grunt');
+    }
+
+    /* ---------- 摄像机：主角保持屏幕中心，触界后钳制 ---------- */
+    updateCam() {
+      const p = this.player;
+      this.cam.x = Math.max(0, Math.min(this.worldW - W, p.x - W / 2));
+      this.cam.y = Math.max(0, Math.min(this.worldH - H, p.y - H / 2));
     }
 
     addFloat(x, y, text, color, size = 14, life = 0.8) {
@@ -42,20 +62,37 @@
 
     /* ---------- 生成 ---------- */
     spawnMonster(type) {
-      const pad = 46, side = Math.floor(Math.random() * 4);
       let x, y;
-      if (side === 0)      { x = Math.random() * W; y = -pad; }
-      else if (side === 1) { x = W + pad; y = Math.random() * H; }
-      else if (side === 2) { x = Math.random() * W; y = H + pad; }
-      else                 { x = -pad; y = Math.random() * H; }
-      const hpScale = this.mode === 'play' ? 1 + this.time / L.bossTime * 0.6 : 1;
-      const m = new Monster(type, x, y, hpScale);
-      this.monsters.push(m);
-      if (type === 'boss') {
-        this.bossSpawned = true; this.boss = m;
-        this.addFloat(W / 2, H * 0.4, '最终怪物出现了！', '#ff5252', 36, 2.2);
+      if (this.mode === 'idle') {
+        const pad = 46, side = Math.floor(Math.random() * 4);
+        if (side === 0)      { x = Math.random() * this.worldW; y = -pad; }
+        else if (side === 1) { x = this.worldW + pad; y = Math.random() * this.worldH; }
+        else if (side === 2) { x = Math.random() * this.worldW; y = this.worldH + pad; }
+        else                 { x = -pad; y = Math.random() * this.worldH; }
+      } else {
+        // 正式关卡：围绕镜头视野外一圈刷出，并夹在世界边界内
+        const m = 70, vx = this.cam.x, vy = this.cam.y;
+        const side = Math.floor(Math.random() * 4);
+        if (side === 0)      { x = vx + Math.random() * W; y = vy - m; }
+        else if (side === 1) { x = vx + W + m; y = vy + Math.random() * H; }
+        else if (side === 2) { x = vx + Math.random() * W; y = vy + H + m; }
+        else                 { x = vx - m; y = vy + Math.random() * H; }
+        x = Math.max(40, Math.min(this.worldW - 40, x));
+        y = Math.max(40, Math.min(this.worldH - 40, y));
       }
-      return m;
+      let hpScale = 1, dmgScale = 1;
+      if (this.mode === 'play') {
+        const st = CONFIG.levelMul(CONFIG.maps.indexOf(this.map), this.levelIdx);
+        hpScale = st.hp * (1 + this.time / this.bossTime() * 0.4);
+        dmgScale = st.dmg;
+      }
+      const mon = new Monster(type, x, y, hpScale, dmgScale);
+      this.monsters.push(mon);
+      if (type === 'boss') {
+        this.bossSpawned = true; this.boss = mon;
+        this.addFloat(this.player.x, this.player.y - 90, '最终怪物出现了！', '#ff5252', 34, 2.2);
+      }
+      return mon;
     }
 
     spawnGem(x, y, v) { this.gems.push(new Gem(x, y, v)); }
@@ -66,16 +103,16 @@
       const dir = Math.atan2(t.y - p.y, t.x - p.x);
       this.arrows.push(new Arrow(p.x, p.y, dir, {
         speed: CONFIG.poses.archer.base.projectileSpeed,
-        damage: p.baseDamage * (p.windformT > 0 ? 1.5 : 1),        // 风行强化箭
+        damage: p.baseDamage * (p.windformT > 0 ? 1.5 : 1),
         maxDist: p.attackRange() + 80,
         pierce: 0, size: 7,
-        distBonus: wd.dist,                                        // 鹰眼猎距
-        split: wd.split, splitGen: wd.splitGen,                    // 风矢分流
+        distBonus: wd.dist,
+        split: wd.split, splitGen: wd.splitGen,
         eliteMul: s.eliteDmg, color: p.windformT > 0 ? '#81d4fa' : '#dcedc8',
       }));
     }
 
-    // 风矢分流：命中后分出弱箭追击附近另一敌人
+    // 风矢分流
     spawnSplitArrow(src, hitM) {
       const o = src.o;
       let best = null, bd = 260;
@@ -96,14 +133,14 @@
     // 短铳：向身前扇形快速泼射一发流弹群（参考刘备平A），两响后装填
     spawnBullet(p, dir, opt = {}) {
       const s = p.stats, g = s.gun;
-      const pellets = opt.mega ? 10 : 6;             // 每响流弹数（终结双响两管齐爆）
-      const spread = opt.mega ? 0.55 : 0.34;         // 扇形半角（弧度）
-      const dmgMul = g.per * (opt.mega ? 2.5 : 1) * 0.45;  // 单发流弹伤害系数
+      const pellets = opt.mega ? 10 : 6;
+      const spread = opt.mega ? 0.55 : 0.34;
+      const dmgMul = g.per * (opt.mega ? 2.5 : 1) * 0.45;
       for (let i = 0; i < pellets; i++) {
-        const t = pellets === 1 ? 0 : i / (pellets - 1) - 0.5;   // -0.5 ~ 0.5
+        const t = pellets === 1 ? 0 : i / (pellets - 1) - 0.5;
         const ang = dir + t * 2 * spread + (Math.random() * 0.06 - 0.03);
         this.arrows.push(new Arrow(p.x, p.y, ang, {
-          speed: 480 + Math.random() * 120,          // 流弹速度略随机
+          speed: 480 + Math.random() * 120,
           damage: p.baseDamage * dmgMul,
           maxDist: 320, pierce: g.pierce + g.pierceAdd, falloff: g.falloff,
           size: (6 + (g.bulletAdd || 0)) * s.areaMul,
@@ -125,7 +162,7 @@
         width: (q.width + (charged ? q.width * 0.4 : 0) + (giant ? q.width : 0)) * s.areaMul,
         pierce: giant ? 99 : q.pierce + q.pierceAdd,
         falloff: giant ? 0 : q.falloff,
-        ret: q.ret, retSpeed: q.retSpeed, giant,
+        ret: q.ret, retSpeed: q.retSpeed, giant, charged,
         eliteMul: s.eliteDmg,
       };
       this.qis.push(new SwordQi(p.x, p.y, dir, o));
@@ -166,7 +203,7 @@
         center: t.center, stun: giant ? 0.8 : 0,
         eliteMul: s.eliteDmg, color: '#9575cd', giant,
         onBoom: (w, sp) => {
-          if (t.frag) {   // 碎星四溅
+          if (t.frag) {
             for (let i = 0; i < t.frag; i++) {
               const ang = (i / t.frag) * Math.PI * 2 + Math.random() * 0.8;
               const r = 70 + Math.random() * 80;
@@ -176,7 +213,7 @@
               }));
             }
           }
-          if (t.follow) {  // 连星坠落
+          if (t.follow) {
             const cands = w.monsters.filter(m => !m.dead && m !== best);
             for (let i = 0; i < t.follow && cands.length; i++) {
               const c = cands.splice(Math.floor(Math.random() * cands.length), 1)[0];
@@ -194,23 +231,20 @@
     witchHit(m) {
       if (m.dead) return;
       const t = this.player.stats.witch;
-      m.addPoison(1, t.dps, t.max, t.dur);                       // 毒咒入骨
-      if (t.slow) {                                              // 寒滞咒
+      m.addPoison(1, t.dps, t.max, t.dur);
+      if (t.slow) {
         m.applySlow(t.slow, 2);
         m.slowStacks++;
         if (m.slowStacks >= 3) { m.slowStacks = 0; m.applyFreeze(t.freeze); }
       }
-      if (t.vulnAt && m.poisonStacks >= t.vulnAt) {              // 脆骨咒印
-        m.vulnT = 3; m.vulnAmt = t.vulnAmt;
-      }
-      if (t.charm && m.poisonStacks >= 3) {                      // 倒戈蛊
+      if (t.vulnAt && m.poisonStacks >= t.vulnAt) { m.vulnT = 3; m.vulnAmt = t.vulnAmt; }
+      if (t.charm && m.poisonStacks >= 3) {
         if (m.type === 'grunt' && Math.random() < t.charmChance) m.charmT = t.charm;
         else if (m.type === 'elite') m.disorderT = Math.max(m.disorderT, 2);
         else if (m.type === 'boss') m.attackSlowT = Math.max(m.attackSlowT, 3);
       }
     }
 
-    // 百蛊夜行：周期毒爆
     detonatePoison() {
       const t = this.player.stats.witch;
       let n = 0;
@@ -223,7 +257,6 @@
       if (n) this.addFloat(this.player.x, this.player.y - 52, '百蛊夜行！', '#c5e1a5', 22);
     }
 
-    // 冲击波（受击回敬 / 一骑当关）
     shockwave(x, y, r, dmg) {
       const s = this.player.stats;
       for (const m of this.monsters) {
@@ -241,7 +274,7 @@
       const p = this.player;
       if (m.xp > 0) this.spawnGem(m.x, m.y, m.xp);
       const t = p.stats.witch;
-      if (t.spreadR && m.poisonStacks > 0) {                     // 病蔓传染
+      if (t.spreadR && m.poisonStacks > 0) {
         const keep = Math.max(1, Math.round(m.poisonStacks * 0.5));
         for (const o of this.monsters) {
           if (o.dead || o === m) continue;
@@ -263,8 +296,8 @@
       this.time += dt;
       const p = this.player;
 
-      // 主页挂机：天选者不响应移动输入（背景演示）
       p.update(dt, this, this.mode === 'idle' ? { x: 0, y: 0 } : this.inputDir);
+      this.updateCam();
 
       if (this.mode === 'idle') {
         if (this.monsters.length < IDLE.maxMonsters) {
@@ -280,7 +313,7 @@
           if (this.bossSpawned) interval *= 2;
           this.spawnTimer = interval;
         }
-        if (!this.bossSpawned && this.time >= L.bossTime) this.spawnMonster('boss');
+        if (!this.bossSpawned && this.time >= this.bossTime()) this.spawnMonster('boss');
       }
 
       for (const m of this.monsters) m.update(dt, this);
@@ -301,37 +334,55 @@
       }
     }
 
+    /* ---------- 渲染（世界坐标 + 摄像机平移） ---------- */
     render(ctx) {
-      const { patches, grasses, trees } = this.decor;
-      ctx.fillStyle = '#79b356'; ctx.fillRect(0, 0, W, H);
-      for (const q of patches) {
-        ctx.fillStyle = '#84bd61';
+      const pal = this.decor.palette, cam = this.cam;
+      // 地面（屏幕空间铺满视口）
+      ctx.fillStyle = pal.ground; ctx.fillRect(0, 0, W, H);
+
+      ctx.save();
+      ctx.translate(-cam.x, -cam.y);
+      // 草地色斑
+      for (const q of this.decor.patches) {
+        ctx.fillStyle = pal.patch;
         ctx.beginPath(); ctx.ellipse(q.x, q.y, q.r, q.r * 0.6, 0, 0, 7); ctx.fill();
       }
-      ctx.strokeStyle = '#5d9b44'; ctx.lineWidth = 3;
-      for (const g of grasses) {
+      // 草丛
+      ctx.strokeStyle = pal.grass; ctx.lineWidth = 3;
+      for (const g of this.decor.grasses) {
         ctx.beginPath();
         ctx.moveTo(g.x - 7, g.y); ctx.quadraticCurveTo(g.x - 5, g.y - 9, g.x - 6, g.y - 12);
         ctx.moveTo(g.x, g.y);     ctx.quadraticCurveTo(g.x, g.y - 11, g.x + 1, g.y - 14);
         ctx.moveTo(g.x + 7, g.y); ctx.quadraticCurveTo(g.x + 5, g.y - 9, g.x + 6, g.y - 12);
         ctx.stroke();
       }
-      for (const t of trees) {
-        ctx.fillStyle = '#8d5a2b'; ctx.fillRect(t.x - 6, t.y - 8, 12, 30);
-        ctx.fillStyle = '#2f6b1f'; ctx.beginPath(); ctx.arc(t.x, t.y - 28, t.r, 0, 7); ctx.fill();
-        ctx.fillStyle = '#3f8328'; ctx.beginPath(); ctx.arc(t.x - t.r * 0.3, t.y - 28 - t.r * 0.3, t.r * 0.62, 0, 7); ctx.fill();
+      // 树木
+      for (const t of this.decor.trees) {
+        ctx.fillStyle = pal.trunk; ctx.fillRect(t.x - 6, t.y - 8, 12, 30);
+        ctx.fillStyle = pal.canopy; ctx.beginPath(); ctx.arc(t.x, t.y - 28, t.r, 0, 7); ctx.fill();
+        ctx.fillStyle = pal.canopy2; ctx.beginPath(); ctx.arc(t.x - t.r * 0.3, t.y - 28 - t.r * 0.3, t.r * 0.62, 0, 7); ctx.fill();
       }
+      // 世界边界（地图有尽头）
+      if (this.mode === 'play') {
+        ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.lineWidth = 8;
+        ctx.strokeRect(6, 6, this.worldW - 12, this.worldH - 12);
+        ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 2;
+        ctx.strokeRect(14, 14, this.worldW - 28, this.worldH - 28);
+      }
+      // 实体（世界坐标）
       for (const g of this.gems) g.draw(ctx);
       for (const sp of this.spells) sp.draw(ctx);
       for (const q of this.qis) q.draw(ctx);
       for (const m of this.monsters) m.draw(ctx);
       for (const a of this.arrows) a.draw(ctx);
       this.player.draw(ctx);
+      // 浮动文字（世界坐标）
       for (const f of this.floats) {
         ctx.globalAlpha = Math.max(0, Math.min(1, f.life / 0.4));
         drawText(ctx, f.text, f.x, f.y, f.size + 'px bold sans-serif', f.color);
         ctx.globalAlpha = 1;
       }
+      ctx.restore();
     }
   }
 

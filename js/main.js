@@ -98,8 +98,8 @@
   /* ---------- HUD ---------- */
   const hpFill = $('hp-fill'), hpText = $('hp-text'), xpFill = $('xp-fill'), xpText = $('xp-text'),
     shieldWrap = $('shield-bar-wrap'), shieldFill = $('shield-fill'), shieldText = $('shield-text'),
-    hudTimer = $('hud-timer'), hudKills = $('hud-kills'), hudPose = $('hud-pose'),
-    bossWrap = $('boss-bar-wrap'), bossFill = $('boss-fill'), bossText = $('boss-text');
+    hudTimer = $('hud-timer'), hudKills = $('hud-kills'), hudPose = $('hud-pose'), hudMap = $('hud-map'),
+    bossBar = $('boss-bar'), bossFill = $('boss-fill'), bossText = $('boss-text');
   function fmtTime(s) {
     return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(Math.floor(s % 60)).padStart(2, '0');
   }
@@ -118,11 +118,12 @@
     hudTimer.textContent = fmtTime(world.time);
     hudKills.textContent = '击杀 ' + world.kills;
     hudPose.textContent = p.pose.name + (st.core ? '·' + SCHOOLS[st.core].name : '');
+    hudMap.textContent = world.map.name + ' ' + (world.levelIdx + 1);
     if (world.boss && !world.boss.dead) {
-      bossWrap.classList.remove('hidden');
+      bossBar.classList.remove('hidden');
       bossFill.style.width = Math.max(0, world.boss.hp / world.boss.maxHp * 100) + '%';
       bossText.textContent = '最终怪物 ' + Math.ceil(Math.max(0, world.boss.hp));
-    } else bossWrap.classList.add('hidden');
+    } else bossBar.classList.add('hidden');
   }
 
   /* ---------- 场景切换（无缝转场：主页UI淡出，画面不切换） ---------- */
@@ -183,7 +184,21 @@
     joy.active = false;
     $('settle-title').textContent = result === 'win' ? '征程告捷' : '征程未竟';
     const p = world.player;
+    // 下一关：本图下一关，或下一张图第1关
+    let next = null;
+    if (result === 'win') {
+      const mi = CONFIG.maps.indexOf(world.map);
+      if (world.levelIdx + 1 < world.map.levels) next = { mapKey: world.map.key, li: world.levelIdx + 1 };
+      else if (mi + 1 < CONFIG.maps.length) next = { mapKey: CONFIG.maps[mi + 1].key, li: 0 };
+    }
+    const btnNext = $('btn-next');
+    if (next) {
+      btnNext.classList.remove('hidden');
+      btnNext.textContent = `下一关 ▶ ${CONFIG.maps.find(m => m.key === next.mapKey).name} ${next.li + 1}`;
+      btnNext.onclick = () => { world.mapKey = next.mapKey; world.levelIdx = next.li; startRun(); };
+    } else btnNext.classList.add('hidden');
     $('settle-stats').innerHTML =
+      `<div class="stat"><span>地图关卡</span><b>${world.map.name} ${world.levelIdx + 1}</b></div>` +
       `<div class="stat"><span>天启之姿</span><b>${p.pose.name}${p.stats.core ? '·' + SCHOOLS[p.stats.core].name : ''}</b></div>` +
       `<div class="stat"><span>用时</span><b>${fmtTime(world.time)}</b></div>` +
       `<div class="stat"><span>击杀</span><b>${world.kills}</b></div>` +
@@ -239,9 +254,25 @@
       box.appendChild(d);
     });
   }
+  function renderMapList() {
+    const box = $('map-list'); box.innerHTML = '';
+    CONFIG.maps.forEach((m, mi) => {
+      const row = document.createElement('div'); row.className = 'map-row';
+      const name = document.createElement('div'); name.className = 'map-name';
+      name.innerHTML = `<span class="map-dot" style="background:${m.palette.ground}"></span>${m.name}`;
+      const lvs = document.createElement('div'); lvs.className = 'map-lvs';
+      for (let li = 0; li < m.levels; li++) {
+        const b = document.createElement('button');
+        b.className = 'lv-btn'; b.textContent = (mi + 1) + '-' + (li + 1);
+        b.onclick = () => { world.mapKey = m.key; world.levelIdx = li; mapModal.classList.add('hidden'); startRun(); };
+        lvs.appendChild(b);
+      }
+      row.appendChild(name); row.appendChild(lvs); box.appendChild(row);
+    });
+  }
+
   $('btn-start').onclick = startRun;
-  $('btn-level1').onclick = startRun;
-  $('btn-map').onclick = () => mapModal.classList.remove('hidden');
+  $('btn-map').onclick = () => { renderMapList(); mapModal.classList.remove('hidden'); };
   $('btn-map-close').onclick = () => mapModal.classList.add('hidden');
   $('btn-pose').onclick = () => { renderPoseChoices(); poseModal.classList.remove('hidden'); };
   $('btn-pose-close').onclick = () => poseModal.classList.add('hidden');

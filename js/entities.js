@@ -116,11 +116,12 @@
     update(dt, world, dir) {
       const s = this.stats;
       this.moving = !!(dir && (dir.x || dir.y));
-      // 移动（软上限 420，占位）
+      // 移动（软上限 420，占位）；地图边界随世界尺寸
       const sp = Math.min(s.moveSpeed, 420);
+      const BW = world.worldW || W, BH = world.worldH || H;
       if (this.moving) {
-        this.x = clamp(this.x + dir.x * sp * dt, this.radius, W - this.radius);
-        this.y = clamp(this.y + dir.y * sp * dt, this.radius, H - this.radius);
+        this.x = clamp(this.x + dir.x * sp * dt, this.radius, BW - this.radius);
+        this.y = clamp(this.y + dir.y * sp * dt, this.radius, BH - this.radius);
       }
       // 计时
       this.sinceHit += dt;
@@ -325,12 +326,12 @@
 
   /* ==================== 怪物 ==================== */
   class Monster {
-    constructor(type, x, y, hpScale = 1) {
+    constructor(type, x, y, hpScale = 1, dmgScale = 1) {
       const c = CONFIG.monsters[type];
       this.type = type; this.name = c.name; this.color = c.color;
       this.x = x; this.y = y;
       this.radius = c.radius; this.speed = c.speed;
-      this.damage = c.damage; this.touchInterval = c.touchInterval;
+      this.damage = c.damage * dmgScale; this.touchInterval = c.touchInterval;
       this.xp = c.xp;
       this.hp = this.maxHp = c.hp * hpScale;
       this.touchCd = 0; this.hitFlash = 0; this.bashCd = 0;
@@ -576,15 +577,22 @@
     }
     draw(ctx) {
       const o = this.o;
+      // 月牙形剑气（参考月牙天冲）：大圆挖去偏移圆，凹面朝施放者、弧背朝前
       ctx.save();
       ctx.translate(this.x, this.y); ctx.rotate(this.dir);
-      const len = o.giant ? 60 : 36, wid = o.width;
-      ctx.fillStyle = o.giant ? 'rgba(255,213,79,.9)' : (this.returning ? 'rgba(179,229,252,.85)' : 'rgba(232,244,255,.85)');
-      ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 2;
+      const R = (o.giant ? o.width * 1.05 : o.width * 0.62);
+      const r2 = R * 0.8, shift = R * 0.45;
+      const cx = R * 0.92;
       ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(-len / 2, -wid / 2, len, wid, wid / 2);
-      else ctx.rect(-len / 2, -wid / 2, len, wid);
-      ctx.fill(); ctx.stroke();
+      ctx.arc(cx, 0, R, 0, Math.PI * 2);
+      ctx.arc(cx - shift, 0, r2, 0, Math.PI * 2, true);
+      ctx.fillStyle = o.giant ? 'rgba(255,213,79,.95)'
+        : (this.returning ? 'rgba(179,229,252,.9)'
+          : (o.charged ? 'rgba(255,224,130,.92)' : 'rgba(232,244,255,.9)'));
+      ctx.fill('evenodd');
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = o.giant ? 'rgba(255,180,60,.9)' : 'rgba(120,180,220,.5)';
+      ctx.stroke();
       ctx.restore();
     }
   }
@@ -656,18 +664,21 @@
     }
   }
 
-  /* ==================== 装饰 ==================== */
-  function genDecor(seed) {
-    const rnd = mulberry32(seed);
+  /* ==================== 装饰（按地图调色板生成于整个世界） ==================== */
+  function genDecor(palette, wW = W, wH = H) {
+    const rnd = mulberry32(Math.floor(Math.random() * 1e9));
+    const scale = Math.max(1, (wW * wH) / (W * H));
     const patches = [], grasses = [], trees = [];
-    for (let i = 0; i < 6; i++) patches.push({ x: rnd() * W, y: rnd() * H, r: 70 + rnd() * 120 });
-    for (let i = 0; i < 18; i++) grasses.push({ x: rnd() * W, y: rnd() * H });
-    for (let i = 0; i < 8; i++) {
-      const x = 50 + rnd() * (W - 100), y = 200 + rnd() * (H - 320);
-      if (Math.hypot(x - W / 2, y - H * 0.62) < 170) continue;
+    const m = 60; // 边界内缩
+    for (let i = 0; i < Math.round(6 * scale); i++)
+      patches.push({ x: m + rnd() * (wW - m * 2), y: m + rnd() * (wH - m * 2), r: 70 + rnd() * 120 });
+    for (let i = 0; i < Math.round(18 * scale); i++)
+      grasses.push({ x: rnd() * wW, y: rnd() * wH });
+    for (let i = 0; i < Math.round(8 * scale); i++) {
+      const x = m + rnd() * (wW - m * 2), y = m + rnd() * (wH - m * 2);
       trees.push({ x, y, r: 30 + rnd() * 18 });
     }
-    return { patches, grasses, trees };
+    return { palette, patches, grasses, trees };
   }
 
   window.GameEntities = { Player, Monster, Arrow, SwordQi, Spell, Gem, drawText, genDecor };

@@ -36,6 +36,26 @@ window.CONFIG = {
     boss:  { name:'最终怪物', hp: 2600, speed: 55, radius: 64, damage: 20, touchInterval: 0.6, xp: 0, color:'#e05252' },
   },
 
+  // 地图与关卡（占位）：4张主题地图 × 各3关，强度随地图序与关内序成长
+  maps: [
+    { key:'grassland', name:'草原', levels:3,
+      palette:{ ground:'#79b356', patch:'#84bd61', grass:'#5d9b44', trunk:'#8d5a2b', canopy:'#2f6b1f', canopy2:'#3f8328' } },
+    { key:'snowfield', name:'雪原', levels:3,
+      palette:{ ground:'#d9e7f0', patch:'#e8f2f8', grass:'#a9c6d6', trunk:'#6b7b8c', canopy:'#48756a', canopy2:'#5c9470' } },
+    { key:'desert', name:'沙漠', levels:3,
+      palette:{ ground:'#e2c48c', patch:'#eed9ac', grass:'#c9a86a', trunk:'#9c7a3c', canopy:'#6f9e4a', canopy2:'#83b258' } },
+    { key:'hell', name:'地狱', levels:3,
+      palette:{ ground:'#4a2430', patch:'#582c3a', grass:'#7a3b4a', trunk:'#38202a', canopy:'#8c2f2f', canopy2:'#a63c3c' } },
+  ],
+  // 关卡强度：第t张地图、第li关（0起）的倍率（占位）
+  levelMul(t, li) {
+    return {
+      hp: 1 + 0.35 * li + 0.45 * t,
+      dmg: 1 + 0.12 * li + 0.18 * t,
+      boss: 1.6 + 0.55 * t + 0.3 * li,
+    };
+  },
+
   // 关卡节奏（占位）
   level: {
     xpBase: 6, xpGrowth: 3,
