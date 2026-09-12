@@ -70,15 +70,34 @@
         else if (side === 2) { x = Math.random() * this.worldW; y = this.worldH + pad; }
         else                 { x = -pad; y = Math.random() * this.worldH; }
       } else {
-        // 正式关卡：围绕镜头视野外一圈刷出，并夹在世界边界内
-        const m = 70, vx = this.cam.x, vy = this.cam.y;
-        const side = Math.floor(Math.random() * 4);
-        if (side === 0)      { x = vx + Math.random() * W; y = vy - m; }
-        else if (side === 1) { x = vx + W + m; y = vy + Math.random() * H; }
-        else if (side === 2) { x = vx + Math.random() * W; y = vy + H + m; }
-        else                 { x = vx - m; y = vy + Math.random() * H; }
+        // 开局8秒内：在玩家周围300-420px生成（快速接战，还原v0.1节奏）
+        const p0 = this.player;
+        // 玩家在移动时，偏向其行进方向前方刷怪，保证走位中也能接战
+        let baseAng = Math.random() * Math.PI * 2;
+        if (p0.moving && (this.inputDir.x || this.inputDir.y))
+          baseAng = Math.atan2(this.inputDir.y, this.inputDir.x) + (Math.random() * 2 - 1) * 1.9;
+        if (this.time < 8) {
+          const d = 300 + Math.random() * 120;
+          x = p0.x + Math.cos(baseAng) * d;
+          y = p0.y + Math.sin(baseAng) * d;
+        } else {
+          // 正式关卡：贴着镜头视野外一圈刷出（移动时60%偏向面朝一侧）
+          const m = 36, vx = this.cam.x, vy = this.cam.y;
+          let side = Math.floor(Math.random() * 4);
+          if (p0.moving && (this.inputDir.x || this.inputDir.y) && Math.random() < 0.6) {
+            const fx = this.inputDir.x, fy = this.inputDir.y;
+            side = Math.abs(fx) >= Math.abs(fy) ? (fx > 0 ? 1 : 3) : (fy > 0 ? 2 : 0);
+          }
+          if (side === 0)      { x = vx + Math.random() * W; y = vy - m; }
+          else if (side === 1) { x = vx + W + m; y = vy + Math.random() * H; }
+          else if (side === 2) { x = vx + Math.random() * W; y = vy + H + m; }
+          else                 { x = vx - m; y = vy + Math.random() * H; }
+        }
         x = Math.max(40, Math.min(this.worldW - 40, x));
         y = Math.max(40, Math.min(this.worldH - 40, y));
+        // 避免贴脸生成
+        const pd = Math.hypot(x - p0.x, y - p0.y);
+        if (pd < 140) { x = p0.x + (x - p0.x) / (pd || 1) * 160; y = p0.y + (y - p0.y) / (pd || 1) * 160; }
       }
       let hpScale = 1, dmgScale = 1;
       if (this.mode === 'play') {
@@ -307,7 +326,7 @@
       } else {
         this.spawnTimer -= dt;
         if (this.spawnTimer <= 0 && this.monsters.length < L.maxMonsters) {
-          const batch = 1 + Math.floor(this.time / 25);
+          const batch = 1 + Math.floor(this.time / 18);
           for (let i = 0; i < batch; i++) this.spawnMonster('grunt');
           let interval = Math.max(0.45, L.spawnInterval - this.time * 0.006);
           if (this.bossSpawned) interval *= 2;
