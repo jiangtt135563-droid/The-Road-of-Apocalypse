@@ -16,6 +16,7 @@
       this.monsters = []; this.arrows = []; this.qis = []; this.spells = []; this.gems = []; this.floats = [];
       this.inputDir = { x: 0, y: 0 };
       this.time = 0; this.kills = 0;
+      this.runLoot = { coins:0, items:{} };
       this.spawnTimer = 0; this.idleRespawn = 0; this.sinceElite = 0;
       this.bossSpawned = false; this.boss = null;
       this.onLevelUp = null; this.onEnd = null;
@@ -41,6 +42,7 @@
       this.monsters.length = 0; this.arrows.length = 0; this.qis.length = 0;
       this.spells.length = 0; this.gems.length = 0; this.floats.length = 0;
       this.time = 0; this.kills = 0; this.sinceElite = 0;
+      this.runLoot = { coins:0, items:{} };
       this.bossSpawned = false; this.boss = null;
       this.over = false; this.paused = false;
       this.spawnTimer = mode === 'play' ? 0.4 : 0;
@@ -300,6 +302,19 @@
       if (this.mode !== 'play') { this.idleRespawn = IDLE.respawnDelay; return; }
       const p = this.player;
       if (m.xp > 0) this.spawnGem(m.x, m.y, m.xp);
+      if (window.InventorySystem) {
+        const coins = m.type === 'boss' ? 60 : (m.type === 'elite' ? 8 : 1);
+        InventorySystem.addCoins(coins); this.runLoot.coins += coins;
+        let drop = null, amount = 1, roll = Math.random();
+        if (m.type === 'boss') { drop = 'mat-crystal'; amount = 2; }
+        else if (m.type === 'elite') drop = roll < .28 ? 'mat-crystal' : (roll < .72 ? 'mat-ore' : 'mat-hide');
+        else if (roll < .07) drop = 'mat-ore'; else if (roll < .11) drop = 'mat-hide';
+        if (drop) {
+          InventorySystem.add(drop, amount); this.runLoot.items[drop] = (this.runLoot.items[drop] || 0) + amount;
+          const item = InventorySystem.get(drop);
+          this.addFloat(m.x, m.y - 24, item.name + ' +' + amount, drop === 'mat-crystal' ? '#d9a7ff' : '#ffd180', 13, 1.1);
+        }
+      }
       const t = p.stats.witch;
       if (t.spreadR && m.poisonStacks > 0) {
         const keep = Math.max(1, Math.round(m.poisonStacks * 0.5));

@@ -18,7 +18,7 @@
         <span>游客0010001</span>
       </div>
       <div id="home-top-right">
-        <div class="ui-block">金币 999+</div>
+        <div class="ui-block" id="home-coins">金币 0</div>
         <div class="ui-block">体力 12/100</div>
       </div>
     </div>
@@ -34,9 +34,9 @@
     </div>
 
     <div id="home-bottom">
-      <button class="big-block" data-todo>背包</button>
+      <button class="big-block" id="btn-bag">背包</button>
       <button class="big-block" data-todo>图鉴</button>
-      <button class="big-block" data-todo>商城</button>
+      <button class="big-block" id="btn-shop">商城</button>
     </div>
 
     <button id="btn-start">踏入征程</button>
@@ -102,6 +102,24 @@
     <button class="panel-btn ghost" id="btn-map-close">关闭</button>
   </div>
 
+  <div id="bag-modal" class="modal bag-modal hidden">
+    <section class="bag-panel" aria-label="背包">
+      <header class="bag-header"><div><div class="bag-kicker">天选者行囊</div><div class="bag-title">背包</div></div><div class="bag-capacity" id="bag-capacity">0 / 30</div><button class="bag-close" id="btn-bag-close">×</button></header>
+      <div class="bag-power-row"><div><span>综合战力</span><strong id="bag-power">0</strong></div><div class="bag-stat-chips" id="bag-stats"></div></div>
+      <div class="bag-role-tabs" id="bag-role-tabs"><button data-bag-role="warrior">战士</button><button data-bag-role="archer">射手</button><button data-bag-role="mage">法师</button></div>
+      <div class="bag-equipped" id="bag-equipped"></div>
+      <nav class="bag-tabs" id="bag-tabs"><button class="active" data-bag-tab="all">全部</button><button data-bag-tab="equipment">装备</button><button data-bag-tab="material">材料</button><button data-bag-tab="consumable">消耗品</button><button data-bag-tab="craft">锻造</button></nav>
+      <div class="bag-content"><div class="bag-grid" id="bag-grid"></div><aside class="bag-detail" id="bag-detail"></aside></div>
+    </section>
+  </div>
+
+  <div id="shop-modal" class="modal shop-modal hidden">
+    <section class="shop-panel" aria-label="商城">
+      <header class="shop-header"><div><small>补给商会</small><h2>商城</h2></div><strong id="shop-coins">金币 0</strong><button class="bag-close" id="btn-shop-close">×</button></header>
+      <div class="shop-notice">基础装备可直接购买；高级装备需要收集怪物材料后在背包中锻造。</div><div class="shop-grid" id="shop-grid"></div>
+    </section>
+  </div>
+
   <div id="toast" class="hidden"></div>
 
   <!-- ===== 测试悬浮球（正式包移除） ===== -->
@@ -118,6 +136,7 @@
   </div>
 </div>
 <script src="js/config.js"></script>
+<script src="js/inventory.js"></script>
 <script src="js/cards.js"></script>
 <script src="js/entities.js"></script>
 <script src="js/world.js"></script>

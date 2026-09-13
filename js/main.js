@@ -7,7 +7,8 @@
   const homeUI = $('home-ui'), gameUI = $('game-ui'),
     cardModal = $('card-modal'), cardChoices = $('card-choices'),
     pauseModal = $('pause-modal'), settleModal = $('settle-modal'),
-    poseModal = $('pose-modal'), mapModal = $('map-modal'), toastEl = $('toast');
+    poseModal = $('pose-modal'), mapModal = $('map-modal'), bagModal = $('bag-modal'),
+    shopModal = $('shop-modal'), toastEl = $('toast');
   let viewScale = 1;
 
   // 调试参数：?fast=N 加速（1-10）；?pose=warrior/archer/mage 指定初始姿态（正式包移除）
@@ -141,7 +142,7 @@
 
   /* ---------- 场景切换（无缝转场：主页UI淡出，画面不切换） ---------- */
   function closeModals() {
-    for (const m of [cardModal, pauseModal, settleModal, poseModal, mapModal]) m.classList.add('hidden');
+    for (const m of [cardModal, pauseModal, settleModal, poseModal, mapModal, bagModal, shopModal]) m.classList.add('hidden');
   }
   function startRun() {
     closeModals(); pendingChoices = 0;
@@ -218,6 +219,8 @@
       `<div class="stat"><span>天启之姿</span><b>${p.pose.name}${p.stats.core ? '·' + SCHOOLS[p.stats.core].name : ''}</b></div>` +
       `<div class="stat"><span>用时</span><b>${fmtTime(world.time)}</b></div>` +
       `<div class="stat"><span>击杀</span><b>${world.kills}</b></div>` +
+      `<div class="stat"><span>本局金币</span><b>+${world.runLoot.coins}</b></div>` +
+      `<div class="stat"><span>掉落材料</span><b>${Object.entries(world.runLoot.items).length ? Object.entries(world.runLoot.items).map(([id,n]) => InventorySystem.get(id).name + '×' + n).join('、') : '无'}</b></div>` +
       `<div class="stat"><span>等级</span><b>Lv.${p.level}</b></div>` +
       `<div class="stat"><span>天启之力选择</span><b>${p.picks}/${CONFIG.maxPicks}</b></div>` +
       `<div class="stat cards"><span>获得天启之力</span><b>${p.takenCards.length ? p.takenCards.join('、') : '无'}</b></div>`;
@@ -288,11 +291,122 @@
     });
   }
 
+  /* ---------- 背包：角色独立装备、分类、详情与锻造 ---------- */
+  const BAG_RARITY = { common:'普通', rare:'稀有', epic:'史诗' };
+  const BAG_POSES = { warrior:'战士', archer:'射手', mage:'法师' };
+  let bagTab = 'all', bagRole = world.player.poseKey, bagSelected = null;
+  function renderBag() {
+    const inv = InventorySystem;
+    const owned = inv.ownedItems();
+    const visible = bagTab === 'all' ? owned : owned.filter(x => x.category === bagTab);
+    $('bag-capacity').textContent = owned.length + ' / 30';
+    $('bag-power').textContent = inv.power(bagRole);
+    const totals = inv.totals(bagRole), loadout = inv.getLoadout(bagRole);
+    $('bag-stats').innerHTML = [
+      `伤害 +${totals.damage || 0}%`, `生命 +${totals.hp || 0}`,
+      `攻速 +${totals.attackSpeed || 0}%`, `移速 +${totals.moveSpeed || 0}`
+    ].map(x => `<span>${x}</span>`).join('');
+
+    $('bag-role-tabs').querySelectorAll('button').forEach(btn => btn.classList.toggle('active', btn.dataset.bagRole === bagRole));
+    $('bag-equipped').innerHTML = Object.entries(inv.slotNames).map(([slot, label]) => {
+      const item = inv.get(loadout[slot]);
+      return `<button class="equip-slot ${item ? item.rarity : 'empty'}" data-slot="${slot}">
+        <span class="equip-label">${label}</span><b>${item ? item.icon : '+'}</b><small>${item ? item.name : '未装备'}</small>
+      </button>`;
+    }).join('');
+    $('bag-equipped').querySelectorAll('.equip-slot').forEach(btn => btn.onclick = () => {
+      const id = loadout[btn.dataset.slot];
+      if (id) { bagSelected = id; bagTab = 'all'; renderBag(); }
+    });
+
+    $('bag-tabs').querySelectorAll('button').forEach(btn => btn.classList.toggle('active', btn.dataset.bagTab === bagTab));
+    if (bagTab === 'craft') { renderCrafting(); return; }
+    if (!visible.some(x => x.id === bagSelected)) bagSelected = visible[0] ? visible[0].id : null;
+    $('bag-grid').innerHTML = visible.length ? visible.map(item => {
+      const equipped = Object.values(loadout).includes(item.id);
+      return `<button class="bag-item ${item.rarity} ${item.id === bagSelected ? 'selected' : ''}" data-item="${item.id}">
+        <b>${item.icon}</b><span>${item.name}</span>${inv.count(item.id) > 1 || item.category !== 'equipment' ? `<i>×${inv.count(item.id)}</i>` : ''}${equipped ? '<em>已装备</em>' : ''}
+      </button>`;
+    }).join('') : '<div class="bag-empty">这个分类还没有物品</div>';
+    $('bag-grid').querySelectorAll('.bag-item').forEach(btn => btn.onclick = () => { bagSelected = btn.dataset.item; renderBag(); });
+
+    const item = inv.get(bagSelected), detail = $('bag-detail');
+    if (!item) { detail.innerHTML = '<div class="bag-empty">请选择物品</div>'; return; }
+    const equipped = item.slot && loadout[item.slot] === item.id;
+    const compatible = !item.poses || item.poses.includes(bagRole);
+    const roleText = item.poses && item.poses.length < 3 ? ' · ' + item.poses.map(x => BAG_POSES[x]).join('/') + '专用' : '';
+    detail.innerHTML = `<div class="detail-icon ${item.rarity}">${item.icon}</div>
+      <div class="detail-copy"><div class="detail-name">${item.name}</div>
+      <div class="detail-meta">${BAG_RARITY[item.rarity]}${item.slot ? ' · ' + inv.slotNames[item.slot] : ''}${roleText}</div>
+      <div class="detail-stats">${inv.statText(item.stats).map(x => `<span>${x}</span>`).join('') || '<span>持有数量：' + inv.count(item.id) + '</span>'}</div>
+      <p>${item.desc}</p></div>
+      ${item.category === 'equipment' ? `<button class="detail-action ${equipped ? 'ghost' : ''}" id="bag-action" ${compatible ? '' : 'disabled'}>${compatible ? (equipped ? '卸下' : '给' + BAG_POSES[bagRole] + '装备') : '该角色无法装备'}</button>` : ''}`;
+    const action = $('bag-action');
+    if (action) action.onclick = () => {
+      if (equipped) { inv.unequip(item.slot, bagRole); toast(BAG_POSES[bagRole] + '已卸下：' + item.name); }
+      else if (inv.equip(item.id, bagRole)) toast(BAG_POSES[bagRole] + '已装备：' + item.name);
+      renderBag();
+    };
+  }
+  function renderCrafting() {
+    const inv = InventorySystem, recipes = inv.recipes;
+    const selectedId = bagSelected && bagSelected.startsWith('recipe:') ? bagSelected.slice(7) : recipes[0].id;
+    bagSelected = 'recipe:' + selectedId;
+    $('bag-grid').innerHTML = recipes.map(r => {
+      const item = inv.get(r.result), owned = inv.owns(item.id), ready = inv.canCraft(r);
+      return `<button class="craft-card ${item.rarity} ${r.id === selectedId ? 'selected' : ''}" data-recipe="${r.id}">
+        <b>${item.icon}</b><span>${item.name}</span><small>${owned ? '已拥有' : (ready ? '可以锻造' : '材料不足')}</small>
+      </button>`;
+    }).join('');
+    $('bag-grid').querySelectorAll('.craft-card').forEach(btn => btn.onclick = () => { bagSelected = 'recipe:' + btn.dataset.recipe; renderBag(); });
+    const recipe = recipes.find(r => r.id === selectedId) || recipes[0], item = inv.get(recipe.result);
+    const costs = Object.entries(recipe.cost).map(([id,n]) => {
+      const mat = inv.get(id), have = inv.count(id); return `<span class="${have >= n ? 'enough' : 'short'}">${mat.name} ${have}/${n}</span>`;
+    }).join('');
+    $('bag-detail').innerHTML = `<div class="detail-icon ${item.rarity}">${item.icon}</div>
+      <div class="detail-copy"><div class="detail-name">锻造 · ${item.name}</div><div class="detail-meta">${BAG_RARITY[item.rarity]}装备</div>
+      <div class="craft-cost">${costs}</div><p>${item.desc}</p></div>
+      <button class="detail-action" id="craft-action" ${inv.canCraft(recipe) && !inv.owns(item.id) ? '' : 'disabled'}>${inv.owns(item.id) ? '已经拥有' : '消耗材料锻造'}</button>`;
+    $('craft-action').onclick = () => {
+      const result = inv.craft(recipe.id);
+      toast(result.ok ? '锻造成功：' + result.item.name : result.reason); renderBag();
+    };
+  }
+  function updateCoins() {
+    $('home-coins').textContent = '金币 ' + InventorySystem.state.coins;
+    $('shop-coins').textContent = '金币 ' + InventorySystem.state.coins;
+  }
+  function renderShop() {
+    const inv = InventorySystem, stock = inv.items.filter(x => x.price);
+    updateCoins();
+    $('shop-grid').innerHTML = stock.map(item => {
+      const sold = item.category === 'equipment' && inv.owns(item.id);
+      const role = item.poses && item.poses.length < 3 ? item.poses.map(x => BAG_POSES[x]).join('/') + '专用' : '全角色可用';
+      return `<article class="shop-card ${item.rarity}"><div class="shop-icon">${item.icon}</div><div class="shop-copy"><b>${item.name}</b>
+        <small>${item.category === 'equipment' ? role : '消耗品 · 持有 ' + inv.count(item.id)}</small><p>${inv.statText(item.stats).join(' · ') || item.desc}</p></div>
+        <button data-buy="${item.id}" ${sold || inv.state.coins < item.price ? 'disabled' : ''}>${sold ? '已拥有' : '金币 ' + item.price}</button></article>`;
+    }).join('');
+    $('shop-grid').querySelectorAll('[data-buy]').forEach(btn => btn.onclick = () => {
+      const result = inv.buy(btn.dataset.buy); toast(result.ok ? '购买成功：' + result.item.name : result.reason); renderShop();
+    });
+  }
+  InventorySystem.setOnChange(kind => {
+    updateCoins();
+    if (kind === 'equip' && world.mode === 'idle') world.player.resetRun();
+  });
+  $('bag-role-tabs').querySelectorAll('button').forEach(btn => btn.onclick = () => { bagRole = btn.dataset.bagRole; bagSelected = null; renderBag(); });
+  $('bag-tabs').querySelectorAll('button').forEach(btn => btn.onclick = () => { bagTab = btn.dataset.bagTab; renderBag(); });
+  updateCoins();
+
   $('btn-start').onclick = startRun;
   $('btn-map').onclick = () => { renderMapList(); mapModal.classList.remove('hidden'); };
   $('btn-map-close').onclick = () => mapModal.classList.add('hidden');
   $('btn-pose').onclick = () => { renderPoseChoices(); poseModal.classList.remove('hidden'); };
   $('btn-pose-close').onclick = () => poseModal.classList.add('hidden');
+  $('btn-bag').onclick = () => { bagRole = world.player.poseKey; renderBag(); bagModal.classList.remove('hidden'); };
+  $('btn-bag-close').onclick = () => bagModal.classList.add('hidden');
+  $('btn-shop').onclick = () => { renderShop(); shopModal.classList.remove('hidden'); };
+  $('btn-shop-close').onclick = () => shopModal.classList.add('hidden');
   $('btn-pause').onclick = togglePause;
   $('btn-resume').onclick = togglePause;
   $('btn-giveup').onclick = showHome;

@@ -59,6 +59,7 @@
         witch: { max: 6, dur: 4, dps: .8, spreadR: 0, vulnAt: 0, vulnAmt: 0, slow: 0,
                  freeze: 0, charm: 0, charmChance: 0, detonate: 0, dt: 0 },
       };
+      if (window.InventorySystem) window.InventorySystem.applyBonuses(this);
       this.shield = 0; this.sinceHit = 99; this.protectT = 0; this.rebirthCd = 0;
       this.level = 1; this.xp = 0; this.xpNeed = CONFIG.level.xpBase;
       this.attackCd = 0; this.fx = 0; this.moveT = 0; this.moving = false;
