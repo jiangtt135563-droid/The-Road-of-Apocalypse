@@ -648,6 +648,7 @@
       if (this.protectT > 0) tags.push(['保护', '#ffd54f']);
       if (s.core === 'zhufeng' && s.wind.rampCap && s.wind.rampStacks > 0)
         tags.push(['连射 ' + Math.round(s.wind.rampStacks / s.wind.rampCap * 100) + '%', '#b3e5fc']);
+      if (useWalkCycle && this.moving) tags.push(['帧' + (frameIdx + 1) + '/4', '#ffffff']);   // 诊断：行走帧序号
       tags.forEach((t, i) => drawText(ctx, t[0], x, y - this.radius - 24 - i * 18, 13, t[1]));
       drawText(ctx, `天选者·${this.pose.name}${s.core ? '·' + SCHOOLS[s.core].name : ''}`, x, y + this.radius + 16, 13, '#fff');
     }
