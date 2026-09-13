@@ -182,7 +182,7 @@
       this.attackCd -= dt;
       if (s.core === 'duanshou') this.updateGun(dt, world);
       else if (this.attackCd <= 0) {
-        const t = this.nearestMonster(world, this.attackRange());
+        const t = this.acquireTarget(world);
         if (t) { this.attackCd = this.attackInterval(t); this.doAttack(world, t); }
         else this.attackCd = 0;
       }
@@ -194,8 +194,26 @@
       if (wd.stack) iv /= 1 + wd.stacks * 0.04;                       // 轻羽步
       if (wd.rampCap) iv /= 1 + wd.rampStacks * wd.rampPer;           // 连射叠层：越射越快
       if (wd.combo && target === wd.comboTarget) iv /= 1 + wd.comboN * 0.03; // 连珠不息
-      if (this.windformT > 0) iv /= 2;                                 // 光矢形态
+      if (this.windformT > 0) iv /= 4;                                 // 光矢形态：倾泻成线
       return iv;
+    }
+
+    // 选目标：按住第二指（锁头）时，优先攻击范围内级别最高的怪物（Boss>精英>小怪），同级取最近
+    acquireTarget(world) {
+      const range = this.attackRange();
+      if (world.lockHeld) {
+        let best = null, bestTier = 0, bestD = Infinity;
+        for (const m of world.monsters) {
+          if (m.dead) continue;
+          const d = Math.hypot(m.x - this.x, m.y - this.y);
+          if (d > range + m.radius) continue;
+          const tier = m.type === 'boss' ? 3 : m.type === 'elite' ? 2 : 1;
+          if (tier > bestTier || (tier === bestTier && d < bestD)) { best = m; bestTier = tier; bestD = d; }
+        }
+        world.lockMark = best;
+        if (best) return best;
+      } else world.lockMark = null;
+      return this.nearestMonster(world, range);
     }
 
     nearestMonster(world, range) {
@@ -247,7 +265,7 @@
       const g = this.stats.gun, gs = this.gunS;
       if (gs.phase === 'ready') {
         if (this.attackCd <= 0) {
-          const t = this.nearestMonster(world, this.attackRange());
+          const t = this.acquireTarget(world);
           if (t) {
             if (gs.mega) {                              // 终结双响：两管齐爆的宽扇面轰击
               gs.mega = false;
@@ -265,7 +283,7 @@
       } else if (gs.phase === 'volley') {
         gs.t -= dt;
         if (gs.t <= 0) {
-          this.shootGun(world, this.nearestMonster(world, this.attackRange()), true, gs.lastFirst);
+          this.shootGun(world, this.acquireTarget(world), true, gs.lastFirst);
           this.enterReload(gs, g);
         }
       } else {                                            // 装填（移动加速）

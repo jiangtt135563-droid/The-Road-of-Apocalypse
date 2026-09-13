@@ -68,15 +68,24 @@
   }
   canvas.addEventListener('pointerdown', e => {
     if (world.mode !== 'play' || world.paused || world.over) return;
+    // 第二根手指（或鼠标右键）按住 = 锁头：优先攻击范围内级别最高的怪物
+    if ((joy.active && e.pointerId !== joy.id) || e.button === 2) {
+      world.lockHeld = true; world.lockPointerId = e.pointerId;
+      return;
+    }
     const p = toDesign(e);
     joy.active = true; joy.id = e.pointerId;
     joy.ox = p.x; joy.oy = p.y; joy.x = p.x; joy.y = p.y;
   });
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
   window.addEventListener('pointermove', e => {
     if (!joy.active || e.pointerId !== joy.id) return;
     const p = toDesign(e); joy.x = p.x; joy.y = p.y;
   });
-  const joyEnd = e => { if (joy.active && e.pointerId === joy.id) joy.active = false; };
+  const joyEnd = e => {
+    if (joy.active && e.pointerId === joy.id) joy.active = false;
+    if (world.lockPointerId === e.pointerId) { world.lockHeld = false; world.lockPointerId = null; }
+  };
   window.addEventListener('pointerup', joyEnd);
   window.addEventListener('pointercancel', joyEnd);
   function joyDir() {

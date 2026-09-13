@@ -23,6 +23,7 @@
       this.levelIdx = 0;                  // 当前关（0起）
       this.cam = { x: 0, y: 0 };
       this.debugInvincible = false;
+      this.lockHeld = false; this.lockPointerId = null; this.lockMark = null;  // 第二指锁头
       this.reset('idle');
     }
 
@@ -116,7 +117,7 @@
 
     spawnGem(x, y, v) { this.gems.push(new Gem(x, y, v)); }
 
-    // 射手基础箭（逐风：连射叠层→光矢；光矢形态=贯穿激光箭）
+    // 射手基础箭（逐风：连射叠层→光矢；光矢形态=倾泻贯穿激光线，攻速×4、单发×0.7保持总量平衡）
     spawnPlayerArrow(p, t) {
       const s = p.stats, wd = s.wind;
       const dir = Math.atan2(t.y - p.y, t.x - p.x);
@@ -125,8 +126,8 @@
       const hot = !wf && ratio >= 0.8;
       const laser = wf || hot;
       this.arrows.push(new Arrow(p.x, p.y, dir, {
-        speed: CONFIG.poses.archer.base.projectileSpeed * (wf ? 1.5 : hot ? 1.25 : 1),
-        damage: p.baseDamage * (wf ? 1.5 : 1),
+        speed: CONFIG.poses.archer.base.projectileSpeed * (wf ? 2 : hot ? 1.25 : 1),
+        damage: p.baseDamage * (wf ? 0.7 : 1),
         maxDist: p.attackRange() + 80,
         pierce: wf ? 3 : (hot ? 1 : 0),
         size: laser ? 4.5 : 7,
@@ -321,6 +322,7 @@
       const dt = rawDt * this.timeScale;
       this.time += dt;
       const p = this.player;
+      this.lockMark = null;   // 锁头标记每帧由选目标逻辑刷新
 
       p.update(dt, this, this.mode === 'idle' ? { x: 0, y: 0 } : this.inputDir);
       this.updateCam();
@@ -402,6 +404,14 @@
       for (const m of this.monsters) m.draw(ctx);
       for (const a of this.arrows) a.draw(ctx);
       this.player.draw(ctx);
+      // 锁头标记
+      if (this.mode === 'play' && this.lockHeld && this.lockMark && !this.lockMark.dead) {
+        const m = this.lockMark;
+        ctx.strokeStyle = '#ff5252'; ctx.lineWidth = 3; ctx.setLineDash([7, 6]);
+        ctx.beginPath(); ctx.arc(m.x, m.y, m.radius + 11, 0, 7); ctx.stroke();
+        ctx.setLineDash([]);
+        drawText(ctx, '锁定', m.x, m.y - m.radius - 24, 13, '#ff5252');
+      }
       // 浮动文字（世界坐标）
       for (const f of this.floats) {
         ctx.globalAlpha = Math.max(0, Math.min(1, f.life / 0.4));
