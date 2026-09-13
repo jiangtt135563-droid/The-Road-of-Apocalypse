@@ -66,6 +66,8 @@ body{display:flex;align-items:center;justify-content:center}
 .card{flex:1;background:#fdfdf8;border-radius:14px;border:3px solid #999;padding:9px 7px;display:flex;flex-direction:column;gap:5px;min-height:170px;max-height:290px;overflow:hidden;cursor:pointer;box-shadow:0 6px 16px rgba(0,0,0,.35);transition:transform .12s}
 .card:active{transform:scale(.96)}
 .card-head{font-size:16px;font-weight:700;text-align:center;padding:4px 2px;border-radius:8px;color:#fff;white-space:nowrap}
+/* 长卡名（4字+++等）：缩字号保证完整单行显示 */
+.card-head.long{font-size:13px}
 .card-sub{font-size:10.5px;color:#777;text-align:center;line-height:1.35}
 .card-desc{font-size:12px;line-height:1.4;color:#333;flex:1;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
 .card-next{font-size:10.5px;line-height:1.35;color:#7a5c1e;background:#fff3d6;border-radius:6px;padding:3px 5px}

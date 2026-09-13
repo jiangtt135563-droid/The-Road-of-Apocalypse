@@ -182,8 +182,9 @@
       const d = document.createElement('div');
       d.className = 'card ' + cardColorClass(c, lv);
       const descText = typeof c.desc === 'string' ? c.desc : (c.desc[lv] || c.desc[c.stars]);
+      const label = c.name + starSuffix(c, lv);
       d.innerHTML =
-        `<div class="card-head">${c.name}${starSuffix(c, lv)}</div>` +
+        `<div class="card-head${label.length >= 5 ? ' long' : ''}">${label}</div>` +
         `<div class="card-sub">${sub}</div>` +
         `<div class="card-desc">${descText}</div>` +
         `<div class="card-next">${nextText}</div>`;
@@ -333,7 +334,12 @@
       toast(world.debugInvincible ? '无敌已开启' : '无敌已关闭');
     } else if (kind === 'summon' || kind === 'elite' || kind === 'boss') {
       if (world.mode !== 'play') { toast('请先进关卡'); return; }
-      const type = kind === 'summon' ? 'grunt' : (kind === 'elite' ? 'elite' : 'boss');
+      if (kind === 'boss') {
+        const m = world.spawnMonster('boss');   // 走正式生成：挂接 world.boss 与 HUD 血条
+        toast('已召唤 ' + m.name);
+        return;
+      }
+      const type = kind === 'summon' ? 'grunt' : 'elite';
       const n = kind === 'summon' ? 5 : 1;
       for (let i = 0; i < n; i++) {
         const ang = Math.random() * Math.PI * 2, r = 160 + Math.random() * 120;
