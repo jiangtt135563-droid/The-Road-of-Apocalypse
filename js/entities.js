@@ -58,8 +58,8 @@
     FX_SHEETS[name] = def;
   }
 
-  /* ==================== 行走帧动画（assets/anim/<class>/move-01..04） ==================== */
-  // 帧为黑底不透明图：加载时自动抠像（边缘泛洪去黑底 + 仅保留最大连通块去切片碎片）并裁剪
+  /* ==================== 行走帧动画（assets/anim/base-<class>/move-01..04） ==================== */
+  // 帧自带透明通道：仅做"最大连通块"清理（去图集切片串入的碎片）并裁剪到内容包围盒
   const WALK_FRAMES = {};   // classKey -> [处理后的canvas ×4]
   function processWalkFrame(img) {
     const cv = document.createElement('canvas');
@@ -68,49 +68,28 @@
     c2.drawImage(img, 0, 0);
     const id = c2.getImageData(0, 0, cv.width, cv.height);
     const d = id.data, Wp = cv.width, Hp = cv.height;
-    const isBg = i => d[i] < 42 && d[i + 1] < 42 && d[i + 2] < 42;   // 近黑背景
-    // 1. 边缘泛洪抠黑底（保留角色内部的深色描边）
-    const stack = [];
-    for (let x = 0; x < Wp; x++) { stack.push(x, (Hp - 1) * Wp + x); }
-    for (let y = 0; y < Hp; y++) { stack.push(y * Wp, y * Wp + Wp - 1); }
-    while (stack.length) {
-      const i = stack.pop();
-      if (d[i + 3] === 0 || !isBg(i)) continue;
-      d[i + 3] = 0;
-      const x = i % Wp;
-      if (x > 0) stack.push(i - 1);
-      if (x < Wp - 1) stack.push(i + 1);
-      if (i >= Wp) stack.push(i - Wp);
-      if (i < Wp * (Hp - 1)) stack.push(i + Wp);
-    }
-    // 2. 只保留最大连通块（去除图集切片串入的相邻帧碎片）
     const label = new Int32Array(Wp * Hp).fill(-1);
-    let bestId = -1, bestCount = 0, cur = 0;
+    let bestId = -1, bestBox = null, cur = 0;
     for (let i = 0; i < d.length; i += 4) {
-      if (d[i + 3] === 0 || label[i] >= 0) continue;
-      let count = 0;
+      if (d[i + 3] < 10 || label[i] >= 0) continue;   // alpha≥10 视为内容
+      let count = 0, minX = Wp, minY = Hp, maxX = 0, maxY = 0;
       const st = [i]; label[i] = cur;
       while (st.length) {
         const j = st.pop(); count++;
-        const x = j % Wp;
-        if (x > 0) { if (d[(j - 1) * 4 + 3] > 0 && label[j - 1] < 0) { label[j - 1] = cur; st.push(j - 1); } }
-        if (x < Wp - 1) { if (d[(j + 1) * 4 + 3] > 0 && label[j + 1] < 0) { label[j + 1] = cur; st.push(j + 1); } }
-        if (j >= Wp) { if (d[(j - Wp) * 4 + 3] > 0 && label[j - Wp] < 0) { label[j - Wp] = cur; st.push(j - Wp); } }
-        if (j < Wp * (Hp - 1)) { if (d[(j + Wp) * 4 + 3] > 0 && label[j + Wp] < 0) { label[j + Wp] = cur; st.push(j + Wp); } }
-      }
-      if (count > bestCount) { bestCount = count; bestId = cur; }
-      cur++;
-    }
-    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 0 && label[i] !== bestId) d[i + 3] = 0;
-    c2.putImageData(id, 0, 0);
-    // 3. 裁剪到内容包围盒
-    let minX = Wp, minY = Hp, maxX = 0, maxY = 0;
-    for (let y = 0; y < Hp; y++) for (let x = 0; x < Wp; x++) {
-      if (d[(y * Wp + x) * 4 + 3] > 0) {
+        const x = j % Wp, y = (j / Wp) | 0;
         if (x < minX) minX = x; if (x > maxX) maxX = x;
         if (y < minY) minY = y; if (y > maxY) maxY = y;
+        if (x > 0) { const k = j - 1; if (d[k * 4 + 3] >= 10 && label[k] < 0) { label[k] = cur; st.push(k); } }
+        if (x < Wp - 1) { const k = j + 1; if (d[k * 4 + 3] >= 10 && label[k] < 0) { label[k] = cur; st.push(k); } }
+        if (y > 0) { const k = j - Wp; if (d[k * 4 + 3] >= 10 && label[k] < 0) { label[k] = cur; st.push(k); } }
+        if (y < Hp - 1) { const k = j + Wp; if (d[k * 4 + 3] >= 10 && label[k] < 0) { label[k] = cur; st.push(k); } }
       }
+      if (count > bestCount) { bestCount = count; bestId = cur; bestBox = [minX, minY, maxX, maxY]; }
+      cur++;
     }
+    for (let i = 0; i < d.length; i += 4) if (label[i] !== bestId) d[i + 3] = 0;
+    c2.putImageData(id, 0, 0);
+    const [minX, minY, maxX, maxY] = bestBox || [0, 0, Wp - 1, Hp - 1];
     const out = document.createElement('canvas');
     out.width = Math.max(1, maxX - minX + 1); out.height = Math.max(1, maxY - minY + 1);
     out.getContext('2d').drawImage(cv, minX, minY, out.width, out.height, 0, 0, out.width, out.height);
@@ -118,16 +97,20 @@
   }
   for (const cls of ['warrior', 'archer', 'mage']) {
     WALK_FRAMES[cls] = [];
-    for (let i = 1; i <= 4; i++) {
-      const url = `assets/anim/base-${cls}/move-0${i}.png`;   // 素材目录为 base-warrior / base-archer / base-mage
+    let remaining = 4;
+    const loadOne = i => {
+      const url = `assets/anim/base-${cls}/move-0${i + 1}.png`;
       const img = new Image();
-      WALK_FRAMES[cls].push(null);   // 占位：处理完成前视为未就绪
       let tries = 0;
-      img.onload = () => { try { WALK_FRAMES[cls][i - 1] = processWalkFrame(img); } catch (e) { console.warn('walk frame fail', cls, i, e); } };
-      img.onerror = () => { if (++tries <= 5) setTimeout(() => { img.src = url + '?r=' + Date.now(); }, 600); };
+      img.onload = () => {
+        try { WALK_FRAMES[cls][i] = processWalkFrame(img); } catch (e) { console.warn('walk frame fail', cls, i, e); }
+        if (--remaining <= 0) console.log('walk frames ready:', cls);
+      };
+      img.onerror = () => { if (++tries <= 30) setTimeout(() => loadOne(i), 1200); };   // 素材后补时自动重试
       img.src = url;
       if (img.complete && img.naturalWidth) img.onload();   // 缓存秒载时 load 事件可能已错过
-    }
+    };
+    for (let i = 0; i < 4; i++) loadOne(i);
   }
 
   /* 一次性特效实例：从图集取一格绘制，随寿命淡出 */
