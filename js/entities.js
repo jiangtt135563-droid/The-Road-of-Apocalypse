@@ -395,12 +395,11 @@
         let bob = 0, rot = 0, sx = 1, sy = 1, ox = 0, oy = 0;
         const ph = this.atkAnim > 0 ? 1 - this.atkAnim / (this.atkDur || 0.18) : 0;  // 攻击动作进度 0→1
         if (this.moving) {
-          bob = -Math.abs(Math.sin(this.walkPhase)) * R * 0.2;           // 步伐起伏
-          rot = Math.sin(this.walkPhase) * 0.05;                          // 行走摆动
-          sx = 1 + Math.sin(this.walkPhase * 2) * 0.035;                  // 迈步伸缩
+          bob = -Math.abs(Math.sin(this.walkPhase)) * R * 0.07;           // 步伐起伏（轻）
+          sx = 1 + Math.sin(this.walkPhase * 2) * 0.012;                  // 迈步伸缩（极轻）
         } else {
-          bob = Math.sin(this.idlePhase) * R * 0.05;                      // 待机呼吸
-          sy = 1 + Math.sin(this.idlePhase) * 0.02;
+          bob = Math.sin(this.idlePhase) * R * 0.03;                      // 待机呼吸（轻）
+          sy = 1 + Math.sin(this.idlePhase) * 0.012;
         }
         if (this.atkAnim > 0) {                                           // 分职业攻击动作
           const e = Math.sin(ph * Math.PI);
