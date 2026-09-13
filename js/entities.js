@@ -20,6 +20,25 @@
     ctx.strokeText(text, x, y);
     ctx.fillStyle = color; ctx.fillText(text, x, y);
   }
+
+  /* ==================== 主角立绘资产（class-forms 9张透明PNG，1334×1179 俯视） ==================== */
+  const SPRITE_FILES = {
+    warrior: 'assets/base-warrior.png',
+    archer: 'assets/base-archer.png',
+    mage: 'assets/base-mage.png',
+    piaobo: 'assets/warrior-wandering-swordsman.png',
+    zhongqi: 'assets/warrior-heavy-knight.png',
+    zhufeng: 'assets/archer-windrunner.png',
+    duanshou: 'assets/archer-double-barrel-gunner.png',
+    zhuixing: 'assets/mage-meteor.png',
+    wushi: 'assets/mage-warlock.png',
+  };
+  const SPRITES = {};
+  for (const k in SPRITE_FILES) {
+    const img = new Image();
+    img.src = SPRITE_FILES[k];
+    SPRITES[k] = img;
+  }
   // 伤害统一入口：精英/最终怪物增伤 + 易伤在 Monster.takeDamage 内处理
   function Elite(info) { return info; }
 
@@ -67,6 +86,7 @@
       this.gunS = { phase: 'ready', t: 0, cycle: 0, mega: false, lastFirst: null };
       this.windformT = 0;
       this.atkIdle = 0;
+      this.facing = 1;                    // 立绘朝向：1右 / -1左
       this.takenCards = [];
       this.picks = 0;                     // 本局已选天启之力次数（上限 CONFIG.maxPicks）
     }
@@ -131,6 +151,7 @@
       if (this.moving) {
         this.x = clamp(this.x + dir.x * sp * dt, this.radius, BW - this.radius);
         this.y = clamp(this.y + dir.y * sp * dt, this.radius, BH - this.radius);
+        if (dir.x) this.facing = dir.x > 0 ? 1 : -1;   // 移动转向
       }
       // 计时
       this.sinceHit += dt;
@@ -234,6 +255,7 @@
 
     doAttack(world, t) {
       const k = this.poseKey;
+      if (t) this.facing = t.x >= this.x ? 1 : -1;   // 攻击转向
       if (k === 'warrior') {
         this.fx = 0.18;
         const dmg = this.meleeDmg();
@@ -330,25 +352,37 @@
         ctx.fillStyle = 'rgba(179,229,252,.25)';
         ctx.beginPath(); ctx.arc(x, y, this.radius + 14, 0, 7); ctx.fill();
       }
-      // 本体
-      ctx.beginPath(); ctx.arc(x, y, this.radius, 0, 7);
-      ctx.fillStyle = this.pose.color; ctx.fill();
-      ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke();
-      ctx.fillStyle = '#1c1c1c';
-      ctx.beginPath(); ctx.arc(x - 8, y - 5, 3, 0, 7); ctx.fill();
-      ctx.beginPath(); ctx.arc(x + 8, y - 5, 3, 0, 7); ctx.fill();
-      // 武器占位
-      if (this.poseKey === 'warrior') {
-        ctx.strokeStyle = '#e8eef7'; ctx.lineWidth = 5;
-        ctx.beginPath(); ctx.moveTo(x + this.radius - 4, y + 6); ctx.lineTo(x + this.radius + 20, y - 14); ctx.stroke();
-      } else if (this.poseKey === 'archer') {
-        ctx.strokeStyle = '#d7a86e'; ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.arc(x + this.radius + 4, y, 14, -1.2, 1.2); ctx.stroke();
+      // 立绘：基础形象随姿态，选定流派后变身影；朝向左右翻转；未加载时回退占位色块
+      const sprKey = this.stats.core || this.poseKey;
+      const img = SPRITES[sprKey];
+      if (img && img.complete && img.naturalWidth) {
+        const h = this.radius * 3.0, w2 = h * (img.naturalWidth / img.naturalHeight);
+        ctx.save();
+        ctx.translate(x, y);
+        if (this.facing < 0) ctx.scale(-1, 1);
+        ctx.drawImage(img, -w2 / 2, -h / 2 - this.radius * 0.3, w2, h);
+        ctx.restore();
       } else {
-        ctx.strokeStyle = '#7b539c'; ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.moveTo(x - this.radius + 2, y + 10); ctx.lineTo(x - this.radius - 8, y - 18); ctx.stroke();
-        ctx.fillStyle = '#c9a6ff';
-        ctx.beginPath(); ctx.arc(x - this.radius - 8, y - 18, 5, 0, 7); ctx.fill();
+        // 占位色块回退
+        ctx.beginPath(); ctx.arc(x, y, this.radius, 0, 7);
+        ctx.fillStyle = this.pose.color; ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke();
+        ctx.fillStyle = '#1c1c1c';
+        ctx.beginPath(); ctx.arc(x - 8, y - 5, 3, 0, 7); ctx.fill();
+        ctx.beginPath(); ctx.arc(x + 8, y - 5, 3, 0, 7); ctx.fill();
+        // 武器占位
+        if (this.poseKey === 'warrior') {
+          ctx.strokeStyle = '#e8eef7'; ctx.lineWidth = 5;
+          ctx.beginPath(); ctx.moveTo(x + this.radius - 4, y + 6); ctx.lineTo(x + this.radius + 20, y - 14); ctx.stroke();
+        } else if (this.poseKey === 'archer') {
+          ctx.strokeStyle = '#d7a86e'; ctx.lineWidth = 4;
+          ctx.beginPath(); ctx.arc(x + this.radius + 4, y, 14, -1.2, 1.2); ctx.stroke();
+        } else {
+          ctx.strokeStyle = '#7b539c'; ctx.lineWidth = 4;
+          ctx.beginPath(); ctx.moveTo(x - this.radius + 2, y + 10); ctx.lineTo(x - this.radius - 8, y - 18); ctx.stroke();
+          ctx.fillStyle = '#c9a6ff';
+          ctx.beginPath(); ctx.arc(x - this.radius - 8, y - 18, 5, 0, 7); ctx.fill();
+        }
       }
       // 状态小字
       const tags = [];

@@ -80,8 +80,9 @@ body{display:flex;align-items:center;justify-content:center}
 
 /* ---------- 天启之姿选择 ---------- */
 #pose-choices{display:flex;gap:10px;width:94%}
-.pose-btn{flex:1;background:#fff;border:3px solid #999;border-radius:14px;padding:14px 10px;display:flex;flex-direction:column;gap:8px;cursor:pointer;align-items:center}
+.pose-btn{flex:1;background:#fff;border:3px solid #999;border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:6px;cursor:pointer;align-items:center}
 .pose-btn.active{outline:4px solid #ffb300;background:#fffbe8}
+.pose-img{width:64px;height:57px;object-fit:contain}
 .pose-name{font-size:20px;font-weight:800}
 .pose-desc{font-size:13px;color:#555;line-height:1.5}
 .pose-schools{font-size:12px;color:#8a6d3b;background:#fff8e6;border-radius:6px;padding:4px 6px;text-align:center}

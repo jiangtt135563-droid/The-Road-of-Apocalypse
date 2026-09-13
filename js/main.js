@@ -197,6 +197,10 @@
         world.player.cards[c.id] = lv;
         world.player.picks++;
         world.player.takenCards.push({ id: c.id, label: c.name + starSuffix(c, lv) });
+        if (c.type === 'core') {   // 流派觉醒：变身影
+          world.addFloat(world.player.x, world.player.y - 64, '流派觉醒：' + SCHOOLS[c.school].name, '#ffd54f', 24, 1.8);
+          toast('流派觉醒：' + SCHOOLS[c.school].name);
+        }
         pendingChoices--;
         if (pendingChoices > 0) openCards();
         else { cardModal.classList.add('hidden'); world.paused = false; }
@@ -275,11 +279,13 @@
   }
   function renderPoseChoices() {
     const box = $('pose-choices'); box.innerHTML = '';
+    const poseImg = { warrior: 'assets/base-warrior.png', archer: 'assets/base-archer.png', mage: 'assets/base-mage.png' };
     Object.values(CONFIG.poses).forEach(po => {
       const d = document.createElement('button');
       d.className = 'pose-btn' + (world.player.poseKey === po.key ? ' active' : '');
       d.style.borderColor = po.color;
       d.innerHTML =
+        `<img class="pose-img" src="${poseImg[po.key]}" alt="">` +
         `<div class="pose-name" style="color:${po.color}">${po.name}</div>` +
         `<div class="pose-desc">${po.desc}</div>` +
         `<div class="pose-schools">流派：${po.schools}</div>`;
