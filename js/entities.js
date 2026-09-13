@@ -58,66 +58,6 @@
     FX_SHEETS[name] = def;
   }
 
-  /* ==================== 行走帧动画（assets/anim/base-<class>/move-01..04） ==================== */
-  // 帧自带透明通道：仅做"最大连通块"清理（去图集切片串入的碎片）并裁剪到内容包围盒
-  const WALK_FRAMES = {};   // classKey -> [处理后的canvas ×4]
-  function processWalkFrame(img) {
-    const cv = document.createElement('canvas');
-    cv.width = img.naturalWidth; cv.height = img.naturalHeight;
-    const c2 = cv.getContext('2d');
-    c2.drawImage(img, 0, 0);
-    const id = c2.getImageData(0, 0, cv.width, cv.height);
-    const d = id.data, Wp = cv.width, Hp = cv.height;
-    const label = new Int32Array(Wp * Hp).fill(-1);
-    let bestId = -1, bestBox = null, bestCount = 0, cur = 0;
-    for (let i = 0; i < d.length; i += 4) {
-      if (d[i + 3] < 10 || label[i] >= 0) continue;   // alpha≥10 视为内容
-      let count = 0, minX = Wp, minY = Hp, maxX = 0, maxY = 0;
-      const st = [i]; label[i] = cur;
-      while (st.length) {
-        const j = st.pop(); count++;
-        const x = j % Wp, y = (j / Wp) | 0;
-        if (x < minX) minX = x; if (x > maxX) maxX = x;
-        if (y < minY) minY = y; if (y > maxY) maxY = y;
-        if (x > 0) { const k = j - 1; if (d[k * 4 + 3] >= 10 && label[k] < 0) { label[k] = cur; st.push(k); } }
-        if (x < Wp - 1) { const k = j + 1; if (d[k * 4 + 3] >= 10 && label[k] < 0) { label[k] = cur; st.push(k); } }
-        if (y > 0) { const k = j - Wp; if (d[k * 4 + 3] >= 10 && label[k] < 0) { label[k] = cur; st.push(k); } }
-        if (y < Hp - 1) { const k = j + Wp; if (d[k * 4 + 3] >= 10 && label[k] < 0) { label[k] = cur; st.push(k); } }
-      }
-      if (count > bestCount) { bestCount = count; bestId = cur; bestBox = [minX, minY, maxX, maxY]; }
-      cur++;
-    }
-    for (let i = 0; i < d.length; i += 4) if (label[i] !== bestId) d[i + 3] = 0;
-    c2.putImageData(id, 0, 0);
-    const [minX, minY, maxX, maxY] = bestBox || [0, 0, Wp - 1, Hp - 1];
-    const out = document.createElement('canvas');
-    out.width = Math.max(1, maxX - minX + 1); out.height = Math.max(1, maxY - minY + 1);
-    out.getContext('2d').drawImage(cv, minX, minY, out.width, out.height, 0, 0, out.width, out.height);
-    return out;
-  }
-  const CACHE_V = Date.now();   // 资源版本参数：绕开浏览器缓存的旧失败响应
-  for (const cls of ['warrior', 'archer', 'mage']) {
-    WALK_FRAMES[cls] = [];
-    let remaining = 4;
-    const loadOne = i => {
-      const url = `assets/anim/base-${cls}/move-0${i + 1}.png?v=${CACHE_V}`;   // 版本参数绕开旧缓存
-      const img = new Image();
-      let tries = 0;
-      img.onload = () => {
-        try { WALK_FRAMES[cls][i] = processWalkFrame(img); } catch (e) { window.__walkErrs = (window.__walkErrs || []).concat(cls + '#' + i + ': ' + String(e && e.message || e)); console.warn('walk frame fail', cls, i, e); }
-        if (--remaining <= 0) console.log('walk frames ready:', cls);
-      };
-      img.onerror = () => { window.__walkErrs = (window.__walkErrs || []).concat(cls + '#' + i + ': load error'); if (++tries <= 30) setTimeout(() => loadOne(cls, i), 1200); };   // 素材后补时自动重试
-      img.src = url;
-      if (img.complete && img.naturalWidth) img.onload();   // 缓存秒载时 load 事件可能已错过
-    };
-    for (let i = 0; i < 4; i++) loadOne(i);
-  }
-  // 自愈：每3秒扫描缺失帧自动补载（素材后补/临时失败/重试耗尽都能恢复）
-  setInterval(() => {
-    for (const cls of ['warrior', 'archer', 'mage'])
-      for (let i = 0; i < 4; i++) if (!WALK_FRAMES[cls][i]) loadOne(cls, i);
-  }, 3000);
 
   /* 一次性特效实例：从图集取一格绘制，随寿命淡出 */
   class FxSprite {
@@ -280,7 +220,7 @@
       if (this.windformT > 0) this.windformT -= dt;
       if (this.atkAnim > 0) this.atkAnim -= dt;
       if (this.transformT > 0) this.transformT -= dt;
-      // 程序化动画相位：移动步伐 / 待机呼吸
+      // 程序化动画相位：待机呼吸 / 移动步伐微起伏
       this.idlePhase += dt * 2.4;
       if (this.moving) this.walkPhase += dt * 11;
       // 护盾：破裂延迟重铸 / 脱战恢复（血战不退加速）
@@ -489,18 +429,11 @@
         ctx.fillStyle = 'rgba(179,229,252,.25)';
         ctx.beginPath(); ctx.arc(x, y, this.radius + 14, 0, 7); ctx.fill();
       }
-      // 立绘：程序化动画——移动步伐起伏/待机呼吸、攻击突进+挥击弧光、变身光束过渡
-      // 基础职业（未选流派）用帧动画行走；流派形态暂用静态立绘（等待流派行走帧）
+      // 立绘：程序化动画——待机呼吸、攻击突进+挥击弧光、变身光束过渡
       const sprKey = this.stats.core || this.poseKey;
       const img = SPRITES[sprKey];
-      const walkFrames = WALK_FRAMES[this.poseKey];
-      const framesReady = walkFrames && walkFrames.length === 4 && walkFrames.every(Boolean);
-      const useWalkCycle = framesReady && this.transformT <= 0;   // 流派形态也复用基础行走帧（同主角身体）
-      let frameIdx = 0;
-      if (useWalkCycle) frameIdx = this.moving ? Math.floor(this.walkPhase / (Math.PI / 2)) % 4 : 0;
-      const drawSrc = useWalkCycle ? walkFrames[frameIdx] : (img && img.complete && img.naturalWidth ? img : null);
-      if (drawSrc || (img && img.complete && img.naturalWidth)) {
-        const src = drawSrc || img;
+      if (img && img.complete && img.naturalWidth) {
+        const src = img;
         const h = this.radius * 4.4, w2 = h * (src.naturalWidth || src.width) / (src.naturalHeight || src.height);
         const R = this.radius, top = -h / 2 - R * 0.3;
         let bob = 0, rot = 0, sx = 1, sy = 1, ox = 0, oy = 0;
@@ -648,7 +581,6 @@
       if (this.protectT > 0) tags.push(['保护', '#ffd54f']);
       if (s.core === 'zhufeng' && s.wind.rampCap && s.wind.rampStacks > 0)
         tags.push(['连射 ' + Math.round(s.wind.rampStacks / s.wind.rampCap * 100) + '%', '#b3e5fc']);
-      if (useWalkCycle && this.moving) tags.push(['帧' + (frameIdx + 1) + '/4', '#ffffff']);   // 诊断：行走帧序号
       tags.forEach((t, i) => drawText(ctx, t[0], x, y - this.radius - 24 - i * 18, 13, t[1]));
       drawText(ctx, `天选者·${this.pose.name}${s.core ? '·' + SCHOOLS[s.core].name : ''}`, x, y + this.radius + 16, 13, '#fff');
     }
@@ -1115,6 +1047,6 @@
     return { palette, patches, grasses, trees };
   }
 
-  window.GameEntities = { Player, Monster, Arrow, SwordQi, Spell, Gem, FxSprite, drawText, genDecor, WALK_FRAMES };
+  window.GameEntities = { Player, Monster, Arrow, SwordQi, Spell, Gem, FxSprite, drawText, genDecor };
 })();
 
