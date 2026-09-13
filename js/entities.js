@@ -119,10 +119,14 @@
   for (const cls of ['warrior', 'archer', 'mage']) {
     WALK_FRAMES[cls] = [];
     for (let i = 1; i <= 4; i++) {
+      const url = `assets/anim/base-${cls}/move-0${i}.png`;   // 素材目录为 base-warrior / base-archer / base-mage
       const img = new Image();
-      img.src = `assets/anim/${cls}/move-0${i}.png`;
       WALK_FRAMES[cls].push(null);   // 占位：处理完成前视为未就绪
+      let tries = 0;
       img.onload = () => { try { WALK_FRAMES[cls][i - 1] = processWalkFrame(img); } catch (e) { console.warn('walk frame fail', cls, i, e); } };
+      img.onerror = () => { if (++tries <= 5) setTimeout(() => { img.src = url + '?r=' + Date.now(); }, 600); };
+      img.src = url;
+      if (img.complete && img.naturalWidth) img.onload();   // 缓存秒载时 load 事件可能已错过
     }
   }
 
@@ -1121,6 +1125,6 @@
     return { palette, patches, grasses, trees };
   }
 
-  window.GameEntities = { Player, Monster, Arrow, SwordQi, Spell, Gem, FxSprite, drawText, genDecor };
+  window.GameEntities = { Player, Monster, Arrow, SwordQi, Spell, Gem, FxSprite, drawText, genDecor, WALK_FRAMES };
 })();
 
