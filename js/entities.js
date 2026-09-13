@@ -390,7 +390,7 @@
       const sprKey = this.stats.core || this.poseKey;
       const img = SPRITES[sprKey];
       if (img && img.complete && img.naturalWidth) {
-        const h = this.radius * 3.0, w2 = h * (img.naturalWidth / img.naturalHeight);
+        const h = this.radius * 4.4, w2 = h * (img.naturalWidth / img.naturalHeight);
         const R = this.radius, top = -h / 2 - R * 0.3;
         let bob = 0, rot = 0, sx = 1, sy = 1, ox = 0, oy = 0;
         const ph = this.atkAnim > 0 ? 1 - this.atkAnim / (this.atkDur || 0.18) : 0;  // 攻击动作进度 0→1
