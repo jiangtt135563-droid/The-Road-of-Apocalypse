@@ -4,7 +4,7 @@
 (function () {
   const W = CONFIG.DESIGN_W, H = CONFIG.DESIGN_H;
   const L = CONFIG.level, IDLE = CONFIG.idle;
-  const { Player, Monster, Arrow, SwordQi, Spell, Gem, drawText, genDecor } = window.GameEntities;
+  const { Player, Monster, Arrow, SwordQi, Spell, Gem, FxSprite, drawText, genDecor } = window.GameEntities;
 
   class World {
     constructor() {
@@ -14,6 +14,7 @@
       this.over = false;
       this.player = null;
       this.monsters = []; this.arrows = []; this.qis = []; this.spells = []; this.gems = []; this.floats = [];
+      this.effects = [];
       this.inputDir = { x: 0, y: 0 };
       this.time = 0; this.kills = 0;
       this.runLoot = { coins:0, items:{} };
@@ -60,6 +61,10 @@
 
     addFloat(x, y, text, color, size = 14, life = 0.8) {
       this.floats.push({ x, y, text, color, size, life, maxLife: life });
+    }
+
+    spawnFx(sheet, cell, x, y, size, opts = {}) {
+      this.effects.push(new FxSprite(sheet, cell, x, y, size, opts));
     }
 
     /* ---------- 生成 ---------- */
@@ -127,16 +132,26 @@
       const ratio = wd.rampCap ? wd.rampStacks / wd.rampCap : 0;
       const hot = !wf && ratio >= 0.8;
       const laser = wf || hot;
+      let sheet, cell, fxSize;
+      if (s.core === 'zhufeng') {
+        sheet = 'windArcher';
+        if (wf)      { cell = 2; fxSize = 64; }
+        else if (hot){ cell = 1; fxSize = 56; }
+        else         { cell = 0; fxSize = 50; }
+      } else {
+        sheet = 'baseAtk'; cell = 1; fxSize = 40;
+      }
       this.arrows.push(new Arrow(p.x, p.y, dir, {
         speed: CONFIG.poses.archer.base.projectileSpeed * (wf ? 2 : hot ? 1.25 : 1),
         damage: p.baseDamage * (wf ? 0.7 : 1),
-        maxDist: p.attackRange(),          // 箭程严格等于攻击范围（范围圈同步）
+        maxDist: p.attackRange(),
         pierce: wf ? 3 : (hot ? 1 : 0),
         size: laser ? 4.5 : 7,
         distBonus: wd.dist,
         split: wd.split, splitGen: wd.splitGen,
         eliteMul: s.eliteDmg,
         laser,
+        sheet, cell, fxSize,
         color: wf ? '#7df9ff' : hot ? '#e0ffff' : '#dcedc8',
       }));
     }
@@ -156,6 +171,7 @@
         speed: 560, damage: o.damage * o.split, maxDist: 300, pierce: 0, size: 6,
         eliteMul: o.eliteMul, color: '#aed581', weakGen: (o.weakGen || 0) + 1,
         split: o.split, splitGen: o.splitGen,
+        sheet: 'windArcher', cell: 0, fxSize: 40,
       }));
     }
 
@@ -176,6 +192,10 @@
           closeAt: g.closeAt, closeBonus: g.closeBonus, kb: 300,
           secondBonus: opt.isSecond ? g.secondBonus : 0, firstTarget: opt.firstTarget || null,
           eliteMul: s.eliteDmg, bullet: true,
+          sheet: 'gunner',
+          cell: opt.mega ? 3 : (opt.isSecond ? 1 : 0),
+          fxSize: (11 + (g.bulletAdd || 0)) * s.areaMul * (opt.mega ? 2 : 1),
+          bulletImpact: 2,
           color: opt.mega ? '#ff8a65' : (opt.isSecond ? '#ffd54f' : '#ffe082'),
         }));
       }
@@ -193,19 +213,22 @@
         falloff: giant ? 0 : q.falloff,
         ret: q.ret, retSpeed: q.retSpeed, giant, charged,
         eliteMul: s.eliteDmg,
+        tier: p.cards['ZJ-01'] || 1,   // 剑气星级→月牙贴图档位
       };
       this.qis.push(new SwordQi(p.x, p.y, dir, o));
       if (giant) this.addFloat(p.x, p.y - 48, '天涯断空！', '#ffd54f', 24);
       else if (charged) this.addFloat(p.x, p.y - 40, '行迹剑气！', '#ffe082', 16);
     }
 
-    // 法师基础法弹（巫师核心附带中毒等）
+    // 法师基础法弹（巫师=毒箭弹体；基础=蓝紫法球）
     spawnBolt(p, t) {
       const s = p.stats;
+      const witch = s.core === 'wushi';
       this.spells.push(new Spell(t.x, t.y, {
         radius: CONFIG.poses.mage.base.spellRadius * s.areaMul,
         delay: 0.18, damage: p.baseDamage,
-        eliteMul: s.eliteDmg, color: '#b39ddb',
+        eliteMul: s.eliteDmg, color: witch ? '#a3e63c' : '#b39ddb',
+        onBoom: (w2, sp) => w2.spawnFx(witch ? 'warlock' : 'baseAtk', witch ? 0 : 2, sp.x, sp.y, 70, { dur: 0.3 }),
         onHit: s.core === 'wushi' ? (m, w) => w.witchHit(m) : null,
       }));
     }
@@ -231,24 +254,26 @@
         radius, delay: giant ? 0.9 : t.delay, damage,
         center: t.center, stun: giant ? 0.8 : 0,
         eliteMul: s.eliteDmg, color: '#9575cd', giant,
+        meteor: true,                      // 使用陨石图集渲染（法阵/坠石/爆炸）
         onBoom: (w, sp) => {
-          if (t.frag) {
+          w.spawnFx('meteorMage', sp.o.giant ? 5 : 2, sp.x, sp.y, sp.o.radius * (sp.o.giant ? 3 : 2.4), { dur: 0.4 });
+          if (t.frag) {   // 碎星四溅
             for (let i = 0; i < t.frag; i++) {
               const ang = (i / t.frag) * Math.PI * 2 + Math.random() * 0.8;
               const r = 70 + Math.random() * 80;
               w.spells.push(new Spell(sp.x + Math.cos(ang) * r, sp.y + Math.sin(ang) * r, {
                 radius: 45 * s.areaMul, delay: 0.25, damage: sp.o.damage * 0.55,
-                eliteMul: s.eliteDmg, color: '#7e57c2',
+                eliteMul: s.eliteDmg, color: '#7e57c2', meteor: true,
               }));
             }
           }
-          if (t.follow) {
+          if (t.follow) {  // 连星坠落
             const cands = w.monsters.filter(m => !m.dead && m !== best);
             for (let i = 0; i < t.follow && cands.length; i++) {
               const c = cands.splice(Math.floor(Math.random() * cands.length), 1)[0];
               w.spells.push(new Spell(c.x, c.y, {
                 radius: radius * 0.7, delay: (giant ? 0.9 : t.delay) + 0.35,
-                damage: damage * t.followMul, eliteMul: s.eliteDmg, color: '#7986cb',
+                damage: damage * t.followMul, eliteMul: s.eliteDmg, color: '#7986cb', meteor: true,
               }));
             }
           }
@@ -260,17 +285,23 @@
     witchHit(m) {
       if (m.dead) return;
       const t = this.player.stats.witch;
+      const firstPoison = m.poisonStacks === 0;
       m.addPoison(1, t.dps, t.max, t.dur);
+      if (firstPoison) this.spawnFx('warlock', 1, m.x, m.y - 4, 46, { dur: 0.3 });          // 毒液飞溅
       if (t.slow) {
         m.applySlow(t.slow, 2);
         m.slowStacks++;
-        if (m.slowStacks >= 3) { m.slowStacks = 0; m.applyFreeze(t.freeze); }
+        if (m.slowStacks >= 3) { m.slowStacks = 0; m.applyFreeze(t.freeze); this.spawnFx('warlock', 5, m.x, m.y, 66, { dur: 0.45 }); }
       }
-      if (t.vulnAt && m.poisonStacks >= t.vulnAt) { m.vulnT = 3; m.vulnAmt = t.vulnAmt; }
+      if (t.vulnAt && m.poisonStacks >= t.vulnAt && m.vulnT <= 0) {
+        m.vulnT = 3; m.vulnAmt = t.vulnAmt;
+        this.spawnFx('warlock', 3, m.x, m.y - 14, 38, { dur: 0.5 });
+      }
       if (t.charm && m.poisonStacks >= 3) {
         if (m.type === 'grunt' && Math.random() < t.charmChance) m.charmT = t.charm;
         else if (m.type === 'elite') m.disorderT = Math.max(m.disorderT, 2);
         else if (m.type === 'boss') m.attackSlowT = Math.max(m.attackSlowT, 3);
+        this.spawnFx('warlock', 6, m.x, m.y, 54, { dur: 0.6 });
       }
     }
 
@@ -279,6 +310,7 @@
       let n = 0;
       for (const m of this.monsters) {
         if (m.dead || m.poisonStacks <= 0) continue;
+        if (n < 8) this.spawnFx('warlock', 7, m.x, m.y, 74, { dur: 0.45 });   // 毒花爆发
         m.takeDamage(m.poisonStacks * t.dps * 3, this, { poison: true });
         m.poisonT = t.dur;
         n++;
@@ -293,6 +325,7 @@
         if (Math.hypot(m.x - x, m.y - y) <= r + m.radius)
           m.takeDamage(dmg * (m.type !== 'grunt' ? s.eliteDmg : 1), this);
       }
+      this.spawnFx('heavyKnight', 1, x, y, r * 1.6, { dur: 0.4 });   // 反击震波环
       this.floats.push({ x, y: y - 30, text: '冲击', color: '#ffe0b2', size: 16, life: 0.4, maxLife: 0.4 });
     }
 
@@ -370,6 +403,8 @@
       this.qis = this.qis.filter(e => !e.dead);
       this.spells = this.spells.filter(e => !e.dead);
       this.gems = this.gems.filter(e => !e.dead);
+      for (const fx of this.effects) fx.update(dt);
+      this.effects = this.effects.filter(e => !e.dead);
       for (const f of this.floats) { f.life -= dt; f.y -= 36 * dt; }
       this.floats = this.floats.filter(f => f.life > 0);
 
@@ -420,6 +455,7 @@
       for (const m of this.monsters) m.draw(ctx);
       for (const a of this.arrows) a.draw(ctx);
       this.player.draw(ctx);
+      for (const fx of this.effects) fx.draw(ctx);
       // 锁头标记
       if (this.mode === 'play' && this.lockHeld && this.lockMark && !this.lockMark.dead) {
         const m = this.lockMark;

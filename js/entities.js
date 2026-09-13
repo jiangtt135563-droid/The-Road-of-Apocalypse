@@ -39,6 +39,47 @@
     img.src = SPRITE_FILES[k];
     SPRITES[k] = img;
   }
+
+  /* ==================== 攻击特效图集（assets/effects 7张，网格排布） ==================== */
+  const FX_SHEETS = {};
+  const FX_SHEET_DEFS = {
+    swordsman:   { file: 'assets/effects/effects-wandering-swordsman.png', cols: 2, rows: 2 },  // 0蓝小月牙 1蓝大月牙 2金小拖尾(行迹) 3金大月牙(断空)
+    heavyKnight: { file: 'assets/effects/effects-heavy-knight.png',        cols: 3, rows: 1 },  // 0盾击火花 1反击震波 2盾破石环
+    windArcher:  { file: 'assets/effects/effects-wind-archer.png',         cols: 3, rows: 1 },  // 0风旋箭 1强化蓝金箭 2青色光矢
+    gunner:      { file: 'assets/effects/effects-double-barrel-gunner.png', cols: 2, rows: 2 }, // 0灰弹 1火弹 2双爆花 3终结爆发
+    meteorMage:  { file: 'assets/effects/effects-meteor-mage.png',         cols: 3, rows: 2 },  // 0落点法阵 1陨石 2爆炸 3碎星 4巨型法阵 5巨型爆发
+    warlock:     { file: 'assets/effects/effects-warlock.png',             cols: 4, rows: 2 },  // 0毒箭 1毒液溅 2毒雾 3紫晶(易伤) 4寒雾(减速) 5冰晶环 6倒戈漩涡 7毒花爆发
+    baseAtk:     { file: 'assets/effects/effects-base-attacks.png',        cols: 3, rows: 1 },  // 0白月牙(近战扫击) 1木箭 2蓝紫法球
+  };
+  for (const name in FX_SHEET_DEFS) {
+    const def = FX_SHEET_DEFS[name];
+    def.img = new Image();
+    def.img.src = def.file;
+    FX_SHEETS[name] = def;
+  }
+
+  /* 一次性特效实例：从图集取一格绘制，随寿命淡出 */
+  class FxSprite {
+    constructor(sheet, cell, x, y, size, opts = {}) {
+      this.sheet = sheet; this.cell = cell;
+      this.x = x; this.y = y; this.size = size;
+      this.rot = opts.rot || 0; this.dur = opts.dur || 0.35;
+      this.life = this.dur; this.dead = false;
+    }
+    update(dt) { this.life -= dt; if (this.life <= 0) this.dead = true; }
+    draw(ctx) {
+      const def = FX_SHEETS[this.sheet];
+      if (!def.img.complete || !def.img.naturalWidth) return;
+      const cw = def.img.naturalWidth / def.cols, ch = def.img.naturalHeight / def.rows;
+      const col = this.cell % def.cols, row = Math.floor(this.cell / def.cols);
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, this.life / this.dur);
+      ctx.translate(this.x, this.y);
+      if (this.rot) ctx.rotate(this.rot);
+      ctx.drawImage(def.img, col * cw, row * ch, cw, ch, -this.size / 2, -this.size / 2, this.size, this.size);
+      ctx.restore();
+    }
+  }
   // 伤害统一入口：精英/最终怪物增伤 + 易伤在 Monster.takeDamage 内处理
   function Elite(info) { return info; }
 
@@ -146,6 +187,7 @@
         if (this.shield <= 0 && s.knight.rebirth && this.rebirthCd <= 0) {
           this.rebirthCd = 8; s.knight.recast = 4; this.protectT = 1.2;
           world.shockwave(this.x, this.y, 220 * s.areaMul, this.baseDamage * 4);
+          world.spawnFx('heavyKnight', 2, this.x, this.y, 300 * s.areaMul, { dur: 0.55 });
           world.addFloat(this.x, this.y - 46, '一骑当关！', '#ffd54f', 24);
         }
       }
@@ -655,6 +697,7 @@
           this.bashCd = 1.2;
           this.takeDamage(k.bash * p.stats.damageMul, world);
           this.knockback(this.x - p.x, this.y - p.y, 300);
+          world.spawnFx('heavyKnight', 0, this.x, this.y, 52, { dur: 0.22 });   // 盾击火花
         }
       }
     }
@@ -743,17 +786,32 @@
           m.takeDamage(dmg * (m.type !== 'grunt' ? o.eliteMul : 1), world);
           if (o.split && (o.weakGen || 0) < o.splitGen) world.spawnSplitArrow(this, m); // 风矢分流
           if (this.pierce > 0) this.pierce--;
-          else { this.dead = true; return; }
+          else {
+            if (o.bulletImpact != null) world.spawnFx('gunner', o.bulletImpact, this.x, this.y, 52, { dur: 0.22 });
+            this.dead = true; return;
+          }
         }
       }
     }
     draw(ctx) {
       const o = this.o;
-      if (o.bullet) {   // 铳弹：圆弹
+      // 特效立绘箭矢/铳弹（sheet/cell 由生成器指定）
+      if (o.sheet && FX_SHEETS[o.sheet] && FX_SHEETS[o.sheet].img.complete && FX_SHEETS[o.sheet].img.naturalWidth) {
+        const def = FX_SHEETS[o.sheet];
+        const cw = def.img.naturalWidth / def.cols, ch = def.img.naturalHeight / def.rows;
+        const s = o.fxSize || 46;
+        ctx.save();
+        ctx.translate(this.x, this.y); ctx.rotate(Math.atan2(this.vy, this.vx));
+        ctx.drawImage(def.img, (o.cell % def.cols) * cw, Math.floor(o.cell / def.cols) * ch, cw, ch,
+          -s * 0.62, -s / 2, s, s * (ch / cw));
+        ctx.restore();
+        return;
+      }
+      if (o.bullet) {   // 铳弹回退：圆弹
         ctx.beginPath(); ctx.arc(this.x, this.y, o.size, 0, 7);
         ctx.fillStyle = o.color; ctx.fill();
         ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.stroke();
-      } else if (o.laser) {   // 光矢：细长激光线（带辉光）
+      } else if (o.laser) {   // 光矢回退：细长激光线（带辉光）
         const len = 26;
         const nx = this.vx / (Math.hypot(this.vx, this.vy) || 1), ny = this.vy / (Math.hypot(this.vx, this.vy) || 1);
         ctx.strokeStyle = o.color; ctx.globalAlpha = 0.35; ctx.lineWidth = 7;
@@ -764,7 +822,7 @@
         ctx.beginPath();
         ctx.moveTo(this.x - nx * len, this.y - ny * len); ctx.lineTo(this.x + nx * 6, this.y + ny * 6);
         ctx.stroke();
-      } else {          // 箭矢：线段
+      } else {          // 箭矢回退：线段
         ctx.strokeStyle = o.color; ctx.lineWidth = 4;
         ctx.beginPath();
         ctx.moveTo(this.x - this.vx * 0.022, this.y - this.vy * 0.022);
@@ -808,7 +866,20 @@
     }
     draw(ctx) {
       const o = this.o;
-      // 单月牙剑气（参考月牙天冲）：外弧凸朝前、内弧凹面朝施放者，双尖在后
+      // 立绘月牙（swordsman图集：0蓝小 1蓝大 2金小拖尾 3金大）——贴图未加载时回退程序绘制
+      const def = FX_SHEETS.swordsman;
+      if (def.img.complete && def.img.naturalWidth) {
+        const cw = def.img.naturalWidth / def.cols, ch = def.img.naturalHeight / def.rows;
+        const cell = o.giant ? 3 : o.charged ? 2 : (o.tier >= 2 ? 1 : 0);
+        const size = o.width * (o.giant ? 4.6 : o.charged ? 3.8 : 3.0);
+        ctx.save();
+        ctx.translate(this.x, this.y); ctx.rotate(this.dir);
+        if (this.returning) ctx.scale(-1, 1);            // 回锋反转
+        ctx.drawImage(def.img, (cell % def.cols) * cw, Math.floor(cell / def.cols) * ch, cw, ch,
+          -size / 2, -size / 2, size, size);
+        ctx.restore();
+        return;
+      }
       ctx.save();
       ctx.translate(this.x, this.y); ctx.rotate(this.dir);
       const h = o.width * 0.55 * (o.giant ? 1.5 : 1) * (o.charged ? 1.15 : 1);   // 半高
@@ -833,6 +904,7 @@
   class Spell {
     constructor(x, y, o) {
       this.x = x; this.y = y; this.o = o;
+      this.delay0 = o.delay;
       this.delay = o.delay; this.boom = 0; this.dead = false;
     }
     update(dt, world) {
@@ -860,6 +932,31 @@
     }
     draw(ctx) {
       const o = this.o, r = o.radius;
+      if (o.meteor) {   // 陨石：图集渲染（落点法阵+坠石+爆炸闪光）
+        const def = FX_SHEETS.meteorMage;
+        if (def.img.complete && def.img.naturalWidth) {
+          const cw = def.img.naturalWidth / def.cols, ch = def.img.naturalHeight / def.rows;
+          const total = o.delay0 || o.delay || 0.6;
+          const q = 1 - Math.max(0, this.delay) / total;   // 下落进度 0→1
+          if (this.delay > 0) {
+            const warnCell = o.giant ? 4 : 0;
+            const ws = r * (o.giant ? 3.2 : 2.4);
+            ctx.save(); ctx.globalAlpha = 0.5 + 0.4 * q;
+            ctx.drawImage(def.img, warnCell * cw, 0, cw, ch, this.x - ws / 2, this.y - ws / 2, ws, ws);
+            ctx.restore();
+            const mx = this.x + (1 - q) * r * 1.8, my = this.y - (1 - q) * r * 2.8;
+            const ms = r * (o.giant ? 1.5 : 1.1);
+            ctx.save(); ctx.translate(mx, my); ctx.rotate(0.7 + q * 0.9);
+            ctx.drawImage(def.img, 1 * cw, 0, cw, ch, -ms / 2, -ms / 2, ms, ms);
+            ctx.restore();
+          } else if (this.boom > 0) {
+            const a = this.boom / 0.28;
+            ctx.fillStyle = o.giant ? `rgba(255,140,60,${0.4 * a})` : `rgba(255,160,80,${0.32 * a})`;
+            ctx.beginPath(); ctx.arc(this.x, this.y, r * (0.5 + 0.5 * a), 0, 7); ctx.fill();
+          }
+          return;
+        }
+      }
       if (this.delay > 0) {
         const urgent = this.delay < 0.25;
         ctx.strokeStyle = urgent ? 'rgba(255,112,67,.9)' : (o.giant ? 'rgba(255,112,67,.7)' : 'rgba(149,117,205,.65)');
@@ -913,5 +1010,5 @@
     return { palette, patches, grasses, trees };
   }
 
-  window.GameEntities = { Player, Monster, Arrow, SwordQi, Spell, Gem, drawText, genDecor };
+  window.GameEntities = { Player, Monster, Arrow, SwordQi, Spell, Gem, FxSprite, drawText, genDecor };
 })();
