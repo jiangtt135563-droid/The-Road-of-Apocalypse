@@ -128,7 +128,7 @@
       this.arrows.push(new Arrow(p.x, p.y, dir, {
         speed: CONFIG.poses.archer.base.projectileSpeed * (wf ? 2 : hot ? 1.25 : 1),
         damage: p.baseDamage * (wf ? 0.7 : 1),
-        maxDist: p.attackRange() + 80,
+        maxDist: p.attackRange(),          // 箭程严格等于攻击范围（范围圈同步）
         pierce: wf ? 3 : (hot ? 1 : 0),
         size: laser ? 4.5 : 7,
         distBonus: wd.dist,

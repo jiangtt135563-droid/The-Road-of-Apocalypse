@@ -68,7 +68,11 @@
   }
   canvas.addEventListener('pointerdown', e => {
     if (world.mode !== 'play' || world.paused || world.over) return;
-    // 第二根手指（或鼠标右键）按住 = 锁头：优先攻击范围内级别最高的怪物
+    // 电脑：鼠标按住（左/右键）= 锁头；触屏：第一指摇杆、第二指锁头
+    if (e.pointerType === 'mouse') {
+      world.lockHeld = true; world.lockPointerId = e.pointerId;
+      return;
+    }
     if ((joy.active && e.pointerId !== joy.id) || e.button === 2) {
       world.lockHeld = true; world.lockPointerId = e.pointerId;
       return;

@@ -72,6 +72,11 @@
 
     get baseDamage() { return this.pose.base.damage * this.stats.damageMul; }
     attackRange() { return this.pose.base.attackRange * this.stats.rangeMul; }
+    // 范围圈显示值：短铳流派用其独有短射程，其余用姿态射程（随射程加成同步变化）
+    attackVisualRange() {
+      if (this.stats.core === 'duanshou') return 320;
+      return this.attackRange();
+    }
     // 血战不退：低血提高近战伤害
     meleeDmg() {
       const s = this.stats;
@@ -303,11 +308,10 @@
 
     draw(ctx) {
       const x = this.x, y = this.y, s = this.stats;
-      // 攻击范围参考（占位可视化）
-      if (this.poseKey === 'warrior' && !s.qi.range) { /* 战士近战圈 */ }
+      // 攻击范围参考（占位可视化）：真实攻击范围，随射程加成同步变化
       ctx.strokeStyle = 'rgba(255,255,255,.18)';
       ctx.setLineDash([8, 10]); ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(x, y, this.poseKey === 'warrior' ? this.attackRange() : Math.min(this.attackRange(), 300), 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, y, this.attackVisualRange(), 0, 7); ctx.stroke();
       ctx.setLineDash([]);
       if (this.fx > 0) {
         const a = this.fx / 0.18;
