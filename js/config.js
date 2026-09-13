@@ -57,6 +57,9 @@ window.CONFIG = {
     };
   },
 
+  // 一关内天启之力选择次数上限（含第1次流派核心；用户 2026-09-13 定）
+  maxPicks: 15,
+
   // 关卡节奏（占位）
   level: {
     xpBase: 6, xpGrowth: 3,

@@ -65,6 +65,7 @@
       this.gunS = { phase: 'ready', t: 0, cycle: 0, mega: false, lastFirst: null };
       this.windformT = 0;
       this.takenCards = [];
+      this.picks = 0;                     // 本局已选天启之力次数（上限 CONFIG.maxPicks）
     }
 
     get baseDamage() { return this.pose.base.damage * this.stats.damageMul; }
@@ -577,19 +578,20 @@
     }
     draw(ctx) {
       const o = this.o;
-      // 月牙形剑气（参考月牙天冲）：大圆挖去偏移圆，凹面朝施放者、弧背朝前
+      // 单月牙剑气（参考月牙天冲）：外弧凸朝前、内弧凹面朝施放者，双尖在后
       ctx.save();
       ctx.translate(this.x, this.y); ctx.rotate(this.dir);
-      const R = (o.giant ? o.width * 1.05 : o.width * 0.62);
-      const r2 = R * 0.8, shift = R * 0.45;
-      const cx = R * 0.92;
+      const h = o.width * 0.55 * (o.giant ? 1.5 : 1) * (o.charged ? 1.15 : 1);   // 半高
+      const depth = o.width * 0.95 * (o.giant ? 1.6 : 1) * (o.charged ? 1.3 : 1); // 弧顶前伸
       ctx.beginPath();
-      ctx.arc(cx, 0, R, 0, Math.PI * 2);
-      ctx.arc(cx - shift, 0, r2, 0, Math.PI * 2, true);
+      ctx.moveTo(0, -h);
+      ctx.quadraticCurveTo(depth * 1.7, 0, 0, h);   // 外弧：顶点≈depth
+      ctx.quadraticCurveTo(depth * 0.5, 0, 0, -h);  // 内弧：顶点≈depth*0.25，凹面朝后
+      ctx.closePath();
       ctx.fillStyle = o.giant ? 'rgba(255,213,79,.95)'
         : (this.returning ? 'rgba(179,229,252,.9)'
           : (o.charged ? 'rgba(255,224,130,.92)' : 'rgba(232,244,255,.9)'));
-      ctx.fill('evenodd');
+      ctx.fill();
       ctx.lineWidth = 2;
       ctx.strokeStyle = o.giant ? 'rgba(255,180,60,.9)' : 'rgba(120,180,220,.5)';
       ctx.stroke();

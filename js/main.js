@@ -145,18 +145,20 @@
     requestAnimationFrame(() => requestAnimationFrame(() => homeUI.classList.remove('fade-out')));
   }
 
-  /* ---------- 天启之力：升级三选一（占位获得方式） ---------- */
+  /* ---------- 天启之力：升级三选一（一关上限 CONFIG.maxPicks 次） ---------- */
   let pendingChoices = 0;
-  world.onLevelUp = () => { pendingChoices++; };
+  world.onLevelUp = () => { if (world.player.picks < CONFIG.maxPicks) pendingChoices++; };
   function openCards() {
     world.paused = true; joy.active = false;
     const choices = drawCards(world.player);
+    if (!choices.length) { world.paused = false; pendingChoices = 0; return; }   // 卡池抽空
     cardChoices.innerHTML = '';
     choices.forEach(c => {
       const lv = (world.player.cards[c.id] || 0) + 1;
       const stars = '★'.repeat(lv) + '☆'.repeat(c.stars - lv);
       const sub = (c.school ? SCHOOLS[c.school].name + ' · ' : '') + TYPE_NAME[c.type] + ' ' + stars;
       const nextText = c.type === 'ult' ? '只能选择一次'
+        : c.type === 'core' ? '核心选定后本关不再出现'
         : (c.next && c.next[lv] ? '下一星：' + c.next[lv] : '已满星');
       const d = document.createElement('div');
       d.className = 'card ' + c.type;
@@ -169,6 +171,7 @@
       d.onclick = () => {
         c.apply(world.player, world, lv);
         world.player.cards[c.id] = lv;
+        world.player.picks++;
         world.player.takenCards.push(c.name + '★' + lv);
         pendingChoices--;
         if (pendingChoices > 0) openCards();
@@ -203,6 +206,7 @@
       `<div class="stat"><span>用时</span><b>${fmtTime(world.time)}</b></div>` +
       `<div class="stat"><span>击杀</span><b>${world.kills}</b></div>` +
       `<div class="stat"><span>等级</span><b>Lv.${p.level}</b></div>` +
+      `<div class="stat"><span>天启之力选择</span><b>${p.picks}/${CONFIG.maxPicks}</b></div>` +
       `<div class="stat cards"><span>获得天启之力</span><b>${p.takenCards.length ? p.takenCards.join('、') : '无'}</b></div>`;
     setTimeout(() => { if (world.over) settleModal.classList.remove('hidden'); }, 600);
   };
