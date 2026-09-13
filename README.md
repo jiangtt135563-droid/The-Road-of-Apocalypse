@@ -6,7 +6,7 @@
 
 ## 在线试玩
 
-启用 GitHub Pages 后访问：`https://<用户名>.github.io/The-Road-of-Apocalypse/`
+部署成功后访问：<https://jiangtt135563-droid.github.io/The-Road-of-Apocalypse/>
 
 （手机、电脑浏览器均可，微信内直接打开）
 
