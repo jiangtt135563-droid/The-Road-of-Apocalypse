@@ -1,4 +1,4 @@
-// cards.js —— 《天启之路》天启之力卡池 v0.2.2
+﻿// cards.js —— 《天启之路》天启之力卡池 v0.2.2
 // 依据《战力系统与第一批天启之力 v0.1》+ 用户 2026-09-13 选卡规则：
 // 一关最多选15次 = 第1次流派核心（一次性选定）+ 成长卡与通用卡相对随机穿插（可升三星，满星移出卡池），
 // 终极进化在成长卡≥2张达二星后随机混入（计入15次）。
@@ -11,7 +11,7 @@
     piaobo:  { name: '漂泊剑客', stance: 'warrior' },
     zhongqi: { name: '重骑士',   stance: 'warrior' },
     zhufeng: { name: '逐风射手', stance: 'archer'  },
-    duanshou:{ name: '短铳射手', stance: 'archer'  },
+    duanshou:{ name: '火炮射手', stance: 'archer'  },
     zhuixing:{ name: '坠星法师', stance: 'mage'    },
     wushi:   { name: '巫师',     stance: 'mage'    },
   };
@@ -31,10 +31,10 @@
     desc:'剑气穿透伤害衰减降低，穿透数+1',
     next:{1:'衰减更低，穿透再+1', 2:'贯穿小怪不再衰减，穿透+1'},
     apply(p,w,lv){ const q=p.stats.qi; q.falloff=A([.10,.06,0],lv); q.pierceAdd=(q.pierceAdd||0)+1; } },
-  { id:'ZJ-04', name:'回锋留影', school:'piaobo', type:'growth', stars:3,
-    desc:'剑气抵达尽头后沿原路折返一次',
-    next:{1:'回锋60%伤害，更快返回', 2:'回锋80%伤害，更快返回'},
-    apply(p,w,lv){ const q=p.stats.qi; q.ret=A([.4,.6,.8],lv); q.retSpeed=A([1,1.3,1.6],lv); } },
+  { id:'ZJ-04', name:'分裂斩', school:'piaobo', type:'growth', stars:3,
+    desc:'挥剑时在主剑气旁侧再放出一道分裂剑气',
+    next:{1:'分裂剑气伤害65%', 2:'分裂剑气伤害80%'},
+    apply(p,w,lv){ p.stats.qi.sideDmg=A([.5,.65,.8],lv); } },
   { id:'ZJ-05', name:'孤客疾行', school:'piaobo', type:'growth', stars:3,
     desc:'持续移动积累行迹，强化下一道剑气',
     next:{1:'积累2.4秒，强化×1.8', 2:'积累1.8秒，强化×2.2'},
@@ -91,7 +91,7 @@
     desc:'连射或移速叠满后进入光矢形态：高速移动，倾泻贯穿光矢',
     apply(p,w,lv){ p.stats.wind.windform=true; } },
 
-  /* ================= D. 射手 · 短铳射手 ================= */
+  /* ================= D. 射手 · 火炮射手 ================= */
   { id:'SD-01', name:'双响短铳', school:'duanshou', type:'core', stars:1,
     desc:'向身前扇形快速泼射两轮流弹，随后装填',
     apply(p,w,lv){ const s=p.stats,g=s.gun; s.core='duanshou'; g.per=A([1.9,2.1,2.3],lv); g.reload=A([1.7,1.55,1.4],lv); g.pierce=A([1,2,3],lv); } },
@@ -111,8 +111,8 @@
     desc:'双响的第二发伤害更高更致命',
     next:{1:'第二发×1.7/额外30%', 2:'第二发×2.0/额外40%'},
     apply(p,w,lv){ const g=p.stats.gun; g.secondMul=A([1.4,1.7,2.0],lv); g.secondBonus=A([.2,.3,.4],lv); } },
-  { id:'SD-06', name:'终结双响', school:'duanshou', type:'ult', stars:1,
-    desc:'每3轮装填后两管齐爆，泼射大量流弹',
+  { id:'SD-06', name:'榴弹炮击', school:'duanshou', type:'ult', stars:1,
+    desc:'每3轮装填后，下一轮向敌人最密集处投掷一枚高伤害榴弹：延迟落地造成大范围爆炸（600%伤害）',
     apply(p,w,lv){ p.stats.gun.megaEvery=3; } },
 
   /* ================= E. 法师 · 坠星法师 ================= */
@@ -135,8 +135,8 @@
     desc:'主陨石落下后追落较小的陨石',
     next:{1:'追落2颗', 2:'追落2颗且伤害更高'},
     apply(p,w,lv){ const t=p.stats.star; t.follow=A([1,2,2],lv); t.followMul=lv>=3?.75:.6; } },
-  { id:'FX-06', name:'天倾星落', school:'zhuixing', type:'ult', stars:1,
-    desc:'每4颗陨石后坠下巨型陨星，震慑全场',
+  { id:'FX-06', name:'烈焰环爆', school:'zhuixing', type:'ult', stars:1,
+    desc:'每召唤4颗陨石后，自身迸发烈焰环：灼烧并击退周围所有敌人，被击退者将遭延迟坠落的陨石砸击',
     apply(p,w,lv){ p.stats.star.giantEvery=4; } },
 
   /* ================= F. 法师 · 巫师 ================= */
@@ -223,3 +223,4 @@
     return pool.slice(0, 3);
   };
 })();
+

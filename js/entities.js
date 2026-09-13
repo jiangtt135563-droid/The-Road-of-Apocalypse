@@ -1,4 +1,4 @@
-// entities.js —— 实体与六流派机制（占位绘制：色块+文字，后续替换正式美术）
+﻿// entities.js —— 实体与六流派机制（占位绘制：色块+文字，后续替换正式美术）
 // 依据《战力系统与第一批天启之力 v0.1》：护盾/减伤、穿透衰减、中毒/易伤/减速/冰冻/反水、
 // 剑气、双响装填、陨石落点、风行等机制均在本文件实现（占位数值）。
 (function () {
@@ -101,7 +101,8 @@
         core: null,
         // 漂泊剑客
         qi: { dmgMul: .6, range: 420, width: 70, speed: 470, pierce: 3, pierceAdd: 0,
-              falloff: .15, ret: 0, retSpeed: 1, chargeNeed: 0, chargeMul: 1.5, giantEvery: 0 },
+              falloff: .15, sideDmg: 0, sideSign: 1, chargeNeed: 0, chargeMul: 1.5,
+              giantEvery: 0, giantDmg: 3.5 },
         // 重骑士
         knight: { regen: 6, delay: 3, bash: 0, thorns: 0, thornR: 110, lowAt: .4, lowBonus: 0,
                   rebirth: false, recast: 0 },
@@ -109,7 +110,7 @@
         wind: { stack: false, stackMax: 0, stacks: 0, t: 0, dist: 0,
                 combo: 0, comboN: 0, comboTarget: null, split: 0, splitGen: 1, windform: false,
                 rampCap: 0, rampPer: 0.04, rampStacks: 0 },
-        // 短铳射手
+        // 火炮射手
         gun: { per: 1.9, reload: 1.7, pierce: 1, pierceAdd: 0, falloff: .2, closeAt: .35,
                closeBonus: 0, secondMul: 1, secondBonus: 0, moveReload: 0, bulletAdd: 0, megaEvery: 0 },
         // 坠星法师
@@ -357,7 +358,7 @@
       }
     }
 
-    /* ---- 短铳射手：双响 → 装填 循环 ---- */
+    /* ---- 火炮射手：双响 → 装填 循环 ---- */
     updateGun(dt, world) {
       const g = this.stats.gun, gs = this.gunS;
       if (gs.phase === 'ready') {
@@ -368,11 +369,10 @@
             const dx = t.x - this.x, dy = t.y - this.y, d = Math.hypot(dx, dy) || 1;
             this.atkDir = { x: dx / d, y: dy / d };
             this.atkDur = this.atkAnim = 0.12;          // 双响节奏短促动作
-            if (gs.mega) {                              // 终结双响：两管齐爆的宽扇面轰击
+            if (gs.mega) {                              // 榴弹炮击：向敌人最密集处投掷高伤榴弹
               gs.mega = false;
-              const dir = Math.atan2(t.y - this.y, t.x - this.x);
-              world.spawnBullet(this, dir, { mega: true });
-              world.addFloat(this.x, this.y - 46, '终结双响！', '#ffab91', 22);
+              world.spawnGrenade(this);
+              world.addFloat(this.x, this.y - 46, '榴弹炮击！', '#ffab91', 22);
               this.enterReload(gs, g);
             } else {
               this.shootGun(world, t, false, null);
@@ -784,6 +784,19 @@
           if (o.secondBonus && o.firstTarget === m) dmg *= 1 + o.secondBonus;     // 第二声轰鸣
           if (o.falloff && this.hit.size > 1) dmg *= Math.pow(1 - o.falloff, this.hit.size - 1); // 穿透衰减
           m.takeDamage(dmg * (m.type !== 'grunt' ? o.eliteMul : 1), world);
+          if (o.aoeWitch) world.witchHit(m);              // 直击目标同样上毒
+          if (o.aoeRadius) {
+            // 元气波溅射（巫师）：以命中点为中心范围伤害并附加中毒
+            world.spawnFx('warlock', 1, this.x, this.y, o.aoeRadius * 1.5, { dur: 0.32 });
+            for (const m2 of world.monsters) {
+              if (m2.dead || this.hit.has(m2)) continue;
+              if (Math.hypot(m2.x - this.x, m2.y - this.y) <= o.aoeRadius + m2.radius) {
+                m2.takeDamage(dmg * 0.8 * (m2.type !== 'grunt' ? o.eliteMul : 1), world);
+                if (o.aoeWitch) world.witchHit(m2);
+              }
+            }
+            this.dead = true; return;
+          }
           if (o.split && (o.weakGen || 0) < o.splitGen) world.spawnSplitArrow(this, m); // 风矢分流
           if (this.pierce > 0) this.pierce--;
           else {
@@ -871,7 +884,7 @@
       if (def.img.complete && def.img.naturalWidth) {
         const cw = def.img.naturalWidth / def.cols, ch = def.img.naturalHeight / def.rows;
         const cell = o.giant ? 3 : o.charged ? 2 : (o.tier >= 2 ? 1 : 0);
-        const size = o.width * (o.giant ? 4.6 : o.charged ? 3.8 : 3.0);
+        const size = o.width * (o.giant ? 3.4 : o.charged ? 3.0 : 2.4);
         ctx.save();
         ctx.translate(this.x, this.y); ctx.rotate(this.dir);
         if (this.returning) ctx.scale(-1, 1);            // 回锋反转
@@ -932,6 +945,28 @@
     }
     draw(ctx) {
       const o = this.o, r = o.radius;
+      if (o.grenade) {  // 榴弹：抛物线坠落 + 落点预警圈
+        const def = FX_SHEETS.gunner;
+        if (def.img.complete && def.img.naturalWidth) {
+          const cw = def.img.naturalWidth / def.cols, ch = def.img.naturalHeight / def.rows;
+          const total = o.delay0 || o.delay || 0.85;
+          const q = 1 - Math.max(0, this.delay) / total;
+          if (this.delay > 0) {
+            ctx.strokeStyle = `rgba(255,120,60,${0.35 + 0.45 * q})`; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(this.x, this.y, o.radius, 0, 7); ctx.stroke();
+            const mx = this.x + (1 - q) * 170, my = this.y - Math.sin(q * Math.PI) * 230 - 16;
+            const ms = 44;
+            ctx.save(); ctx.translate(mx, my); ctx.rotate(q * 2.4);
+            ctx.drawImage(def.img, 0, 0, cw, ch, -ms / 2, -ms / 2, ms, ms);
+            ctx.restore();
+          } else if (this.boom > 0) {
+            const a = this.boom / 0.28;
+            ctx.fillStyle = `rgba(255,140,60,${0.45 * a})`;
+            ctx.beginPath(); ctx.arc(this.x, this.y, o.radius * (0.5 + 0.5 * a), 0, 7); ctx.fill();
+          }
+          return;
+        }
+      }
       if (o.meteor) {   // 陨石：图集渲染（落点法阵+坠石+爆炸闪光）
         const def = FX_SHEETS.meteorMage;
         if (def.img.complete && def.img.naturalWidth) {
@@ -1012,3 +1047,4 @@
 
   window.GameEntities = { Player, Monster, Arrow, SwordQi, Spell, Gem, FxSprite, drawText, genDecor };
 })();
+

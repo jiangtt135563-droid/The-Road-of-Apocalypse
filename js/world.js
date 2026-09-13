@@ -23,6 +23,7 @@
       this.onLevelUp = null; this.onEnd = null;
       this.levelNo = 1;                   // 天梯关卡号（1起，共 CONFIG.ladder.levels 关）
       this.cam = { x: 0, y: 0 };
+      this.rings = [];                    // 扩散环特效（烈焰环爆等）
       this.debugInvincible = false;
       this.lockHeld = false; this.lockPointerId = null; this.lockMark = null;  // 第二指锁头
       this.reset('idle');
@@ -41,6 +42,7 @@
       this.player.x = this.worldW / 2; this.player.y = this.worldH / 2;
       this.monsters.length = 0; this.arrows.length = 0; this.qis.length = 0;
       this.spells.length = 0; this.gems.length = 0; this.floats.length = 0;
+      this.effects.length = 0; this.rings.length = 0;
       this.time = 0; this.kills = 0; this.sinceElite = 0;
       this.runLoot = { coins:0, items:{} };
       this.bossSpawned = false; this.boss = null;
@@ -201,35 +203,50 @@
       }
     }
 
-    // 漂泊剑客剑气
+    // 漂泊剑客剑气（分裂斩：主剑气旁侧交替放出一道分裂剑气）
     spawnQi(p, target, charged, giant) {
       const s = p.stats, q = s.qi;
       const dir = Math.atan2(target.y - p.y, target.x - p.x);
-      const o = {
-        damage: p.baseDamage * q.dmgMul * (charged ? q.chargeMul : 1) * (giant ? 3 : 1),
-        speed: q.speed, range: q.range,
-        width: (q.width + (charged ? q.width * 0.4 : 0) + (giant ? q.width : 0)) * s.areaMul,
-        pierce: giant ? 99 : q.pierce + q.pierceAdd,
-        falloff: giant ? 0 : q.falloff,
-        ret: q.ret, retSpeed: q.retSpeed, giant, charged,
-        eliteMul: s.eliteDmg,
-        tier: p.cards['ZJ-01'] || 1,   // 剑气星级→月牙贴图档位
+      const mk = (dmgMul, offset) => {
+        const o = {
+          damage: p.baseDamage * dmgMul * (charged ? q.chargeMul : 1) * (giant ? q.giantDmg : 1),
+          speed: q.speed, range: q.range,
+          width: (q.width + (charged ? q.width * 0.4 : 0) + (giant ? q.width : 0)) * s.areaMul,
+          pierce: giant ? 99 : q.pierce + q.pierceAdd,
+          falloff: giant ? 0 : q.falloff,
+          giant, charged,
+          eliteMul: s.eliteDmg,
+          tier: p.cards['ZJ-01'] || 1,   // 剑气星级→月牙贴图档位
+        };
+        const perp = dir + Math.PI / 2;
+        this.qis.push(new SwordQi(p.x + Math.cos(perp) * offset, p.y + Math.sin(perp) * offset, dir, o));
       };
-      this.qis.push(new SwordQi(p.x, p.y, dir, o));
+      mk(q.dmgMul, 0);
+      if (q.sideDmg && !giant) {   // 分裂斩
+        mk(q.dmgMul * q.sideDmg, q.width * 1.2 * q.sideSign);
+        q.sideSign *= -1;
+      }
       if (giant) this.addFloat(p.x, p.y - 48, '天涯断空！', '#ffd54f', 24);
       else if (charged) this.addFloat(p.x, p.y - 40, '行迹剑气！', '#ffe082', 16);
     }
 
-    // 法师基础法弹（巫师=毒箭弹体；基础=蓝紫法球）
+    // 法师普攻：发射元气波投射物——基础法师单体伤害；巫师命中后毒液溅射造成范围伤害并上毒
     spawnBolt(p, t) {
       const s = p.stats;
       const witch = s.core === 'wushi';
-      this.spells.push(new Spell(t.x, t.y, {
-        radius: CONFIG.poses.mage.base.spellRadius * s.areaMul,
-        delay: 0.18, damage: p.baseDamage,
-        eliteMul: s.eliteDmg, color: witch ? '#a3e63c' : '#b39ddb',
-        onBoom: (w2, sp) => w2.spawnFx(witch ? 'warlock' : 'baseAtk', witch ? 0 : 2, sp.x, sp.y, 70, { dur: 0.3 }),
-        onHit: s.core === 'wushi' ? (m, w) => w.witchHit(m) : null,
+      const dir = Math.atan2(t.y - p.y, t.x - p.x);
+      this.arrows.push(new Arrow(p.x, p.y, dir, {
+        speed: 640,
+        damage: p.baseDamage,
+        maxDist: p.attackRange() + 140,
+        pierce: 0, size: 9,
+        eliteMul: s.eliteDmg,
+        sheet: witch ? 'warlock' : 'baseAtk',
+        cell: witch ? 0 : 2,
+        fxSize: 40,
+        aoeRadius: witch ? CONFIG.poses.mage.base.spellRadius * s.areaMul : 0,
+        aoeWitch: witch,
+        color: witch ? '#a3e63c' : '#b39ddb',
       }));
     }
 
@@ -248,15 +265,16 @@
       if (!best) return;
       const giant = t.giantEvery && (t.count + 1) % t.giantEvery === 0;
       t.count++;
-      const radius = t.radius * s.areaMul * (giant ? 1.9 : 1);
-      const damage = p.baseDamage * t.dmgMul * (giant ? 3 : 1);
+      if (giant) { this.flameRingBurst(p, t, s, best); return; }   // 奥义：烈焰环爆替代巨型陨石
+      const radius = t.radius * s.areaMul;
+      const damage = p.baseDamage * t.dmgMul;
       this.spells.push(new Spell(best.x, best.y, {
-        radius, delay: giant ? 0.9 : t.delay, damage,
-        center: t.center, stun: giant ? 0.8 : 0,
-        eliteMul: s.eliteDmg, color: '#9575cd', giant,
+        radius, delay: t.delay, damage,
+        center: t.center,
+        eliteMul: s.eliteDmg, color: '#9575cd',
         meteor: true,                      // 使用陨石图集渲染（法阵/坠石/爆炸）
         onBoom: (w, sp) => {
-          w.spawnFx('meteorMage', sp.o.giant ? 5 : 2, sp.x, sp.y, sp.o.radius * (sp.o.giant ? 3 : 2.4), { dur: 0.4 });
+          w.spawnFx('meteorMage', 2, sp.x, sp.y, sp.o.radius * 2.4, { dur: 0.4 });
           if (t.frag) {   // 碎星四溅
             for (let i = 0; i < t.frag; i++) {
               const ang = (i / t.frag) * Math.PI * 2 + Math.random() * 0.8;
@@ -272,12 +290,60 @@
             for (let i = 0; i < t.follow && cands.length; i++) {
               const c = cands.splice(Math.floor(Math.random() * cands.length), 1)[0];
               w.spells.push(new Spell(c.x, c.y, {
-                radius: radius * 0.7, delay: (giant ? 0.9 : t.delay) + 0.35,
+                radius: radius * 0.7, delay: t.delay + 0.35,
                 damage: damage * t.followMul, eliteMul: s.eliteDmg, color: '#7986cb', meteor: true,
               }));
             }
           }
         },
+      }));
+    }
+
+    // 坠星法师奥义：烈焰环爆——自身迸发火焰灼烧并击退周围敌人，被击退者遭延迟陨石砸击
+    flameRingBurst(p, t, s, best) {
+      const R = 240 * s.areaMul;
+      const dmg = p.baseDamage * t.dmgMul * 2.0;
+      this.rings.push({ x: p.x, y: p.y, r: 30, maxR: R, life: 0.45, maxLife: 0.45 });
+      this.addFloat(p.x, p.y - 60, '烈焰环爆！', '#ff8a50', 26, 1.6);
+      const hits = [];
+      for (const m of this.monsters) {
+        if (m.dead) continue;
+        const d = Math.hypot(m.x - p.x, m.y - p.y);
+        if (d <= R + m.radius) {
+          m.takeDamage(dmg * (m.type !== 'grunt' ? s.eliteDmg : 1), this);
+          m.knockback(m.x - p.x, m.y - p.y, 380);
+          hits.push({ x: m.x, y: m.y });
+        }
+      }
+      // 被击退的敌人遭到延迟坠落的陨石砸击（技能配合）
+      for (const h of hits.slice(0, 8)) {
+        this.spells.push(new Spell(h.x, h.y, {
+          radius: t.radius * 0.8 * s.areaMul, delay: 0.55,
+          damage: p.baseDamage * t.dmgMul * 1.4, center: t.center,
+          stun: 0.3, eliteMul: s.eliteDmg, color: '#ff7043', meteor: true,
+        }));
+      }
+    }
+
+    // 火炮射手奥义：向敌人最密集处投掷一枚高伤害榴弹
+    spawnGrenade(p) {
+      const s = p.stats, g = s.gun;
+      let best = null, bestN = -1;
+      for (const m of this.monsters) {
+        if (m.dead || Math.hypot(m.x - p.x, m.y - p.y) > p.attackRange() + m.radius) continue;
+        let n = 0;
+        for (const o of this.monsters) {
+          if (o !== m && !o.dead && Math.hypot(o.x - m.x, o.y - m.y) < 130) n++;
+        }
+        if (n > bestN) { bestN = n; best = m; }
+      }
+      const tx = best ? best.x : p.x + 220, ty = best ? best.y : p.y;
+      this.spells.push(new Spell(tx, ty, {
+        radius: 140 * s.areaMul, delay: 0.85,
+        damage: p.baseDamage * g.per * 6,
+        eliteMul: s.eliteDmg, color: '#ff7043',
+        grenade: true,
+        onBoom: (w, sp) => w.spawnFx('gunner', 3, sp.x, sp.y, sp.o.radius * 2.6, { dur: 0.45 }),
       }));
     }
 
@@ -407,6 +473,8 @@
       this.effects = this.effects.filter(e => !e.dead);
       for (const f of this.floats) { f.life -= dt; f.y -= 36 * dt; }
       this.floats = this.floats.filter(f => f.life > 0);
+      for (const ring of this.rings) { ring.life -= dt; ring.r += (ring.maxR - ring.r) * Math.min(1, dt * 9); }
+      this.rings = this.rings.filter(r => r.life > 0);
 
       if (this.mode === 'play' && p.stats.hp <= 0 && !this.over) {
         this.over = 'lose'; if (this.onEnd) this.onEnd('lose');
@@ -456,6 +524,16 @@
       for (const a of this.arrows) a.draw(ctx);
       this.player.draw(ctx);
       for (const fx of this.effects) fx.draw(ctx);
+      // 扩散环（烈焰环爆）
+      for (const ring of this.rings) {
+        const a = Math.max(0, ring.life / ring.maxLife);
+        ctx.strokeStyle = `rgba(255,120,60,${0.75 * a})`;
+        ctx.lineWidth = 10;
+        ctx.beginPath(); ctx.arc(ring.x, ring.y, ring.r, 0, 7); ctx.stroke();
+        ctx.strokeStyle = `rgba(255,220,150,${0.5 * a})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(ring.x, ring.y, ring.r * 0.86, 0, 7); ctx.stroke();
+      }
       // 锁头标记
       if (this.mode === 'play' && this.lockHeld && this.lockMark && !this.lockMark.dead) {
         const m = this.lockMark;
