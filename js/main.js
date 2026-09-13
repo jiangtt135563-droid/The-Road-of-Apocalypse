@@ -27,7 +27,8 @@
     const lv = (world.player.cards[id] || 0) + 1;
     c.apply(world.player, world, lv);
     world.player.cards[id] = lv;
-    world.player.takenCards.push(c.name + '★' + lv);
+    world.player.picks++;
+    world.player.takenCards.push({ id: c.id, label: c.name + (c.type === 'core' || c.type === 'ult' ? '' : lv >= 3 ? '++' : lv === 2 ? '+' : '') });
     return c.name + '★' + lv;
   };
 
@@ -161,6 +162,12 @@
   /* ---------- 天启之力：升级三选一（常规上限15次+第16次奥义专属选） ---------- */
   let pendingChoices = 0;
   world.onLevelUp = () => { pendingChoices++; };   // 选满后由 openCards 判定空池自动跳过
+  const starSuffix = (c, lv) => c.type === 'core' || c.type === 'ult' ? '' : (lv >= 3 ? '++' : lv === 2 ? '+' : '');
+  const cardColorClass = (c, lv) => {
+    if (c.type === 'ult') return 'ult';
+    if (c.type === 'generic') return 'generic';
+    return lv >= 3 ? 'g3' : lv === 2 ? 'g2' : 'g1';   // 特化：1星绿/2星蓝/3星黄
+  };
   function openCards() {
     world.paused = true; joy.active = false;
     const choices = drawCards(world.player);
@@ -168,16 +175,15 @@
     cardChoices.innerHTML = '';
     choices.forEach(c => {
       const lv = (world.player.cards[c.id] || 0) + 1;
-      const stars = '★'.repeat(lv) + '☆'.repeat(c.stars - lv);
-      const sub = (c.school ? SCHOOLS[c.school].name + ' · ' : '') + TYPE_NAME[c.type] + ' ' + stars;
+      const sub = (c.school ? SCHOOLS[c.school].name + ' · ' : '') + TYPE_NAME[c.type];
       const nextText = c.type === 'ult' ? '只能选择一次'
         : c.type === 'core' ? '核心选定后本关不再出现'
-        : (c.next && c.next[lv] ? '下一星：' + c.next[lv] : '已满星');
+        : (c.next && c.next[lv] ? '下一星：' + c.next[lv] : '选后满星');
       const d = document.createElement('div');
-      d.className = 'card ' + c.type;
+      d.className = 'card ' + cardColorClass(c, lv);
       const descText = typeof c.desc === 'string' ? c.desc : (c.desc[lv] || c.desc[c.stars]);
       d.innerHTML =
-        `<div class="card-head">${c.name}</div>` +
+        `<div class="card-head">${c.name}${starSuffix(c, lv)}</div>` +
         `<div class="card-sub">${sub}</div>` +
         `<div class="card-desc">${descText}</div>` +
         `<div class="card-next">${nextText}</div>`;
@@ -185,7 +191,7 @@
         c.apply(world.player, world, lv);
         world.player.cards[c.id] = lv;
         world.player.picks++;
-        world.player.takenCards.push(c.name + '★' + lv);
+        world.player.takenCards.push({ id: c.id, label: c.name + starSuffix(c, lv) });
         pendingChoices--;
         if (pendingChoices > 0) openCards();
         else { cardModal.classList.add('hidden'); world.paused = false; }
@@ -220,18 +226,26 @@
       `<div class="stat"><span>击杀</span><b>${world.kills}</b></div>` +
       `<div class="stat"><span>等级</span><b>Lv.${p.level}</b></div>` +
       `<div class="stat"><span>天启之力选择</span><b>${p.picks} 次</b></div>` +
-      `<div class="stat cards"><span>获得天启之力</span><b>${p.takenCards.length ? p.takenCards.join('、') : '无'}</b></div>`;
+      `<div class="stat cards"><span>获得天启之力</span><b>${p.takenCards.length ? p.takenCards.map(t => t.label).join('、') : '无'}</b></div>`;
     setTimeout(() => { if (world.over) settleModal.classList.remove('hidden'); }, 600);
   };
 
-  /* ---------- 暂停（含已选天启之力回看） ---------- */
+  /* ---------- 暂停（含已选天启之力回看，点击芯片查看详情） ---------- */
   function renderPauseCards() {
     const box = $('pause-cards');
     const taken = world.player.takenCards;
-    box.innerHTML = `<div class="pc-title">天启之力（${taken.length}）</div>` +
+    box.innerHTML = `<div class="pc-title">天启之力（${taken.length}）· 点击查看效果</div>` +
       (taken.length
-        ? `<div class="pc-list">${taken.map(n => `<span class="pc-chip">${n}</span>`).join('')}</div>`
+        ? `<div class="pc-list">${taken.map((t, i) => `<span class="pc-chip" data-i="${i}">${t.label}</span>`).join('')}</div><div id="pause-detail">↑ 点击上方卡片查看具体效果</div>`
         : `<div class="pc-none">本局尚未获得天启之力</div>`);
+    box.querySelectorAll('.pc-chip').forEach(ch => ch.onclick = () => {
+      const t = taken[+ch.dataset.i];
+      const card = CARDS.find(c => c.id === t.id);
+      const lv = world.player.cards[card.id] || 1;
+      const descText = typeof card.desc === 'string' ? card.desc : (card.desc[lv] || card.desc[card.stars]);
+      const extra = lv < card.stars && card.next && card.next[lv] ? `　下一星：${card.next[lv]}` : '　已满星';
+      $('pause-detail').innerHTML = `<b>${card.name}${starSuffix(card, lv)}</b>（${TYPE_NAME[card.type]}）：${descText}${extra}`;
+    });
   }
   function togglePause() {
     if (world.mode !== 'play' || world.over) return;

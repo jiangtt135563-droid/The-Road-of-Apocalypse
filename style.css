@@ -69,8 +69,10 @@ body{display:flex;align-items:center;justify-content:center}
 .card-sub{font-size:10.5px;color:#777;text-align:center;line-height:1.35}
 .card-desc{font-size:12px;line-height:1.4;color:#333;flex:1;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
 .card-next{font-size:10.5px;line-height:1.35;color:#7a5c1e;background:#fff3d6;border-radius:6px;padding:3px 5px}
-.card.core{border-color:#ff9800}.card.core .card-head{background:#ff9800}
-.card.growth{border-color:#58c24a}.card.growth .card-head{background:#58c24a}
+/* 特化天启按星级配色（用户定案）：1星绿 / 2星蓝 / 3星黄；奥义紫；通用灰 */
+.card.g1{border-color:#58c24a}.card.g1 .card-head{background:#58c24a}
+.card.g2{border-color:#4d9fff}.card.g2 .card-head{background:#4d9fff}
+.card.g3{border-color:#f2c14e}.card.g3 .card-head{background:#e0a800}
 .card.ult{border-color:#b06ae0}.card.ult .card-head{background:#b06ae0}
 .card.generic{border-color:#b9bec4}.card.generic .card-head{background:#b9bec4}
 
@@ -92,8 +94,10 @@ body{display:flex;align-items:center;justify-content:center}
 #pause-cards{width:82%;max-width:360px;background:rgba(255,255,255,.92);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
 #pause-cards .pc-title{font-size:14px;font-weight:800;color:#555}
 #pause-cards .pc-list{display:flex;flex-wrap:wrap;gap:6px}
-#pause-cards .pc-chip{font-size:12px;background:#fff3d6;color:#7a5c1e;border:1px solid #e6c877;border-radius:8px;padding:3px 8px}
+#pause-cards .pc-chip{font-size:12px;background:#fff3d6;color:#7a5c1e;border:1px solid #e6c877;border-radius:8px;padding:3px 8px;cursor:pointer}
+#pause-cards .pc-chip:hover{background:#ffe9b3}
 #pause-cards .pc-none{font-size:13px;color:#999}
+#pause-detail{font-size:12px;line-height:1.5;color:#333;background:#e8f4ff;border:1px solid #b8d8f0;border-radius:6px;padding:5px 8px;margin-top:2px}
 
 /* ---------- 地图关卡选择 ---------- */
 #map-list{display:flex;flex-direction:column;gap:10px;width:90%;max-width:430px}
