@@ -21,7 +21,7 @@ window.CONFIG = {
     archer: { key:'archer', name:'射手', color:'#39b54a',
       desc:'远距离自动射击最近的敌人（占位）',
       schools:'逐风射手 / 短铳射手',
-      base: { damage: 9, attackInterval: 0.55, attackRange: 470, projectileSpeed: 640 } },
+      base: { damage: 10, attackInterval: 0.55, attackRange: 470, projectileSpeed: 640 } },
     mage: { key:'mage', name:'法师', color:'#9b59d0',
       desc:'中距离法术轰炸（占位）',
       schools:'坠星法师 / 巫师',

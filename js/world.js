@@ -116,18 +116,25 @@
 
     spawnGem(x, y, v) { this.gems.push(new Gem(x, y, v)); }
 
-    // 射手基础箭（含逐风各强化）
+    // 射手基础箭（逐风：连射叠层→光矢；光矢形态=贯穿激光箭）
     spawnPlayerArrow(p, t) {
       const s = p.stats, wd = s.wind;
       const dir = Math.atan2(t.y - p.y, t.x - p.x);
+      const wf = p.windformT > 0;
+      const ratio = wd.rampCap ? wd.rampStacks / wd.rampCap : 0;
+      const hot = !wf && ratio >= 0.8;
+      const laser = wf || hot;
       this.arrows.push(new Arrow(p.x, p.y, dir, {
-        speed: CONFIG.poses.archer.base.projectileSpeed,
-        damage: p.baseDamage * (p.windformT > 0 ? 1.5 : 1),
+        speed: CONFIG.poses.archer.base.projectileSpeed * (wf ? 1.5 : hot ? 1.25 : 1),
+        damage: p.baseDamage * (wf ? 1.5 : 1),
         maxDist: p.attackRange() + 80,
-        pierce: 0, size: 7,
+        pierce: wf ? 3 : (hot ? 1 : 0),
+        size: laser ? 4.5 : 7,
         distBonus: wd.dist,
         split: wd.split, splitGen: wd.splitGen,
-        eliteMul: s.eliteDmg, color: p.windformT > 0 ? '#81d4fa' : '#dcedc8',
+        eliteMul: s.eliteDmg,
+        laser,
+        color: wf ? '#7df9ff' : hot ? '#e0ffff' : '#dcedc8',
       }));
     }
 

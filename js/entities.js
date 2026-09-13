@@ -47,7 +47,8 @@
                   rebirth: false, recast: 0 },
         // 逐风射手
         wind: { stack: false, stackMax: 0, stacks: 0, t: 0, dist: 0,
-                combo: 0, comboN: 0, comboTarget: null, split: 0, splitGen: 1, windform: false },
+                combo: 0, comboN: 0, comboTarget: null, split: 0, splitGen: 1, windform: false,
+                rampCap: 0, rampPer: 0.04, rampStacks: 0 },
         // 短铳射手
         gun: { per: 1.9, reload: 1.7, pierce: 1, pierceAdd: 0, falloff: .2, closeAt: .35,
                closeBonus: 0, secondMul: 1, secondBonus: 0, moveReload: 0, bulletAdd: 0, megaEvery: 0 },
@@ -64,6 +65,7 @@
       this.charged = false; this.qiCount = 0;
       this.gunS = { phase: 'ready', t: 0, cycle: 0, mega: false, lastFirst: null };
       this.windformT = 0;
+      this.atkIdle = 0;
       this.takenCards = [];
       this.picks = 0;                     // 本局已选天启之力次数（上限 CONFIG.maxPicks）
     }
@@ -117,8 +119,8 @@
     update(dt, world, dir) {
       const s = this.stats;
       this.moving = !!(dir && (dir.x || dir.y));
-      // 移动（软上限 420，占位）；地图边界随世界尺寸
-      const sp = Math.min(s.moveSpeed, 420);
+      // 移动（软上限 420，占位）；地图边界随世界尺寸；风行/光矢形态加移速
+      const sp = Math.min(s.moveSpeed, 420) * (this.windformT > 0 ? 1.4 : 1);
       const BW = world.worldW || W, BH = world.worldH || H;
       if (this.moving) {
         this.x = clamp(this.x + dir.x * sp * dt, this.radius, BW - this.radius);
@@ -151,17 +153,23 @@
         s.witch.dt += dt;
         if (s.witch.dt >= s.witch.detonate) { s.witch.dt = 0; world.detonatePoison(); }
       }
-      // 轻羽步 + 风行无踪
+      // 轻羽步 + 风行无踪 + 逐风连射叠层
       const wd = s.wind;
       if (wd.stack) {
         if (this.moving) {
           wd.t += dt;
           if (wd.t >= 0.5) { wd.t -= 0.5; wd.stacks = Math.min(wd.stackMax, wd.stacks + 1); }
         } else { wd.t = 0; wd.stacks = Math.max(0, wd.stacks - dt * 4); }
-        if (wd.windform && this.windformT <= 0 && wd.stacks >= wd.stackMax) {
-          this.windformT = 3; wd.stacks = 0;
-          world.addFloat(this.x, this.y - 46, '风行无踪！', '#b3e5fc', 22);
-        }
+      }
+      // 连射叠层：停手0.6秒后快速消退
+      if (wd.rampCap) {
+        this.atkIdle += dt;
+        if (this.atkIdle > 0.6) wd.rampStacks = Math.max(0, wd.rampStacks - 8 * dt);
+      }
+      if (wd.windform && this.windformT <= 0 &&
+          ((wd.stack && wd.stacks >= wd.stackMax) || (wd.rampCap && wd.rampStacks >= wd.rampCap))) {
+        this.windformT = 4; wd.stacks = 0; wd.rampStacks = 0;
+        world.addFloat(this.x, this.y - 46, '光矢形态！', '#7df9ff', 22);
       }
       // 孤客疾行：行迹积累
       if (s.core === 'piaobo' && s.qi.chargeNeed) {
@@ -184,8 +192,9 @@
       let iv = this.pose.base.attackInterval / this.stats.rateMul;
       const wd = this.stats.wind;
       if (wd.stack) iv /= 1 + wd.stacks * 0.04;                       // 轻羽步
+      if (wd.rampCap) iv /= 1 + wd.rampStacks * wd.rampPer;           // 连射叠层：越射越快
       if (wd.combo && target === wd.comboTarget) iv /= 1 + wd.comboN * 0.03; // 连珠不息
-      if (this.windformT > 0) iv /= 2;                                 // 风行
+      if (this.windformT > 0) iv /= 2;                                 // 光矢形态
       return iv;
     }
 
@@ -220,6 +229,10 @@
         if (wd.combo) {                                // 连珠不息
           if (t === wd.comboTarget) wd.comboN = Math.min(wd.combo, wd.comboN + 1);
           else { wd.comboTarget = t; wd.comboN = 0; }
+        }
+        if (wd.rampCap) {                              // 连射叠层：越射越快
+          this.atkIdle = 0;
+          wd.rampStacks = Math.min(wd.rampCap, wd.rampStacks + 1);
         }
         world.spawnPlayerArrow(this, t);
       } else {
@@ -318,8 +331,10 @@
       const tags = [];
       if (this.gunS.phase === 'reload') tags.push(['装填' + this.gunS.t.toFixed(1) + 's', '#ffcc80']);
       if (this.charged) tags.push(['⚡行迹', '#ffe082']);
-      if (this.windformT > 0) tags.push(['风行', '#b3e5fc']);
+      if (this.windformT > 0) tags.push(['光矢形态', '#7df9ff']);
       if (this.protectT > 0) tags.push(['保护', '#ffd54f']);
+      if (s.core === 'zhufeng' && s.wind.rampCap && s.wind.rampStacks > 0)
+        tags.push(['连射 ' + Math.round(s.wind.rampStacks / s.wind.rampCap * 100) + '%', '#b3e5fc']);
       tags.forEach((t, i) => drawText(ctx, t[0], x, y - this.radius - 24 - i * 18, 13, t[1]));
       drawText(ctx, `天选者·${this.pose.name}${s.core ? '·' + SCHOOLS[s.core].name : ''}`, x, y + this.radius + 16, 13, '#fff');
     }
@@ -505,7 +520,9 @@
       this.x += mx; this.y += my;
       this.traveled += Math.hypot(mx, my);
       const o = this.o;
-      if (this.traveled > o.maxDist || this.x < -40 || this.x > W + 40 || this.y < -40 || this.y > H + 40) {
+      // 出界判定随世界尺寸（v0.2.3 修复：原用设计屏幕尺寸导致大地图右/下半区箭矢秒消失）
+      const BW = world.worldW || W, BH = world.worldH || H;
+      if (this.traveled > o.maxDist || this.x < -40 || this.x > BW + 40 || this.y < -40 || this.y > BH + 40) {
         this.dead = true; return;
       }
       for (const m of world.monsters) {
@@ -534,6 +551,17 @@
         ctx.beginPath(); ctx.arc(this.x, this.y, o.size, 0, 7);
         ctx.fillStyle = o.color; ctx.fill();
         ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.stroke();
+      } else if (o.laser) {   // 光矢：细长激光线（带辉光）
+        const len = 26;
+        const nx = this.vx / (Math.hypot(this.vx, this.vy) || 1), ny = this.vy / (Math.hypot(this.vx, this.vy) || 1);
+        ctx.strokeStyle = o.color; ctx.globalAlpha = 0.35; ctx.lineWidth = 7;
+        ctx.beginPath();
+        ctx.moveTo(this.x - nx * len, this.y - ny * len); ctx.lineTo(this.x + nx * 6, this.y + ny * 6);
+        ctx.stroke();
+        ctx.globalAlpha = 1; ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(this.x - nx * len, this.y - ny * len); ctx.lineTo(this.x + nx * 6, this.y + ny * 6);
+        ctx.stroke();
       } else {          // 箭矢：线段
         ctx.strokeStyle = o.color; ctx.lineWidth = 4;
         ctx.beginPath();

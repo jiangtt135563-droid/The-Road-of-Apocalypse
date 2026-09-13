@@ -69,8 +69,8 @@
 
   /* ================= C. 射手 · 逐风射手 ================= */
   { id:'SS-01', name:'逐风长弓', school:'zhufeng', type:'core', stars:1,
-    desc:'射程、攻速、移速全面提高',
-    apply(p,w,lv){ const s=p.stats; s.core='zhufeng'; s.rangeMul+=A([.15,.25,.35],lv)-(lv>1?A([.15,.25,.35],lv-1):0); s.rateMul+=A([.18,.30,.42],lv)-(lv>1?A([.18,.30,.42],lv-1):0); s.moveSpeed*=1+A([.08,.12,.16],lv)-(lv>1?A([.08,.12,.16],lv-1):0); } },
+    desc:'射程攻速移速提高；连续射击越射越快，叠满化为光矢',
+    apply(p,w,lv){ const s=p.stats,wd=s.wind; s.core='zhufeng'; s.rangeMul+=.15; s.rateMul+=.18; s.moveSpeed*=1.08; wd.rampCap=15; wd.rampPer=0.04; } },
   { id:'SS-02', name:'轻羽步', school:'zhufeng', type:'growth', stars:3,
     desc:'持续移动叠加攻速，停下后逐渐消退',
     next:{1:'层数上限6', 2:'层数上限8'},
@@ -87,8 +87,8 @@
     desc:'命中后分出弱箭，追击附近另一敌人',
     next:{1:'分流55%伤害', 2:'分流70%，可再分流'},
     apply(p,w,lv){ const wd=p.stats.wind; wd.split=A([.4,.55,.7],lv); wd.splitGen=lv>=3?2:1; } },
-  { id:'SS-06', name:'风行无踪', school:'zhufeng', type:'ult', stars:1,
-    desc:'移速层数攒满后进入高速强化风行',
+  { id:'SS-06', name:'光矢无踪', school:'zhufeng', type:'ult', stars:1,
+    desc:'连射或移速叠满后进入光矢形态：高速移动，倾泻贯穿光矢',
     apply(p,w,lv){ p.stats.wind.windform=true; } },
 
   /* ================= D. 射手 · 短铳射手 ================= */
@@ -190,10 +190,10 @@
     apply(p,w,lv){ const d=A([.12,.20,.30],lv)-(lv>1?A([.12,.20,.30],lv-1):0); p.stats.eliteDmg+=d; } },
   ];
 
-  // 三选一抽卡（v0.2.2 规则，按用户 2026-09-13 确认）：
+  // 三选一抽卡（v0.2.3 规则）：
   // 1) 一关最多选15次（CONFIG.maxPicks），第1次必出本姿态双核心+1通用，核心一次性选定不再出现；
   // 2) 之后每次从[未满星流派成长 + 未满星通用]中相对随机取3，特化与通用穿插出现，不偏向先后；
-  // 3) 满星卡不再刷出；终极进化在成长卡有≥2张达二星后可随机混入（计入15次）。
+  // 3) 满星卡不再刷出；终极进化门控：三张流派成长卡升至三星后解锁刷出资格（计入15次）。
   window.drawCards = function (p) {
     const lv = id => p.cards[id] || 0;
     const cores = CARDS.filter(c => c.type === 'core' && SCHOOLS[c.school].stance === p.poseKey);
@@ -208,8 +208,8 @@
       if (c.type === 'growth' && c.school === ownedCore.school) pool.push(c);
       else if (c.type === 'generic') pool.push(c);
       else if (c.type === 'ult' && c.school === ownedCore.school && !lv(c.id)) {
-        const g2 = CARDS.filter(x => x.type === 'growth' && x.school === ownedCore.school && lv(x.id) >= 2).length;
-        if (g2 >= 2) pool.push(c);                       // 终极门控：两张二星成长
+        const g3 = CARDS.filter(x => x.type === 'growth' && x.school === ownedCore.school && lv(x.id) >= 3).length;
+        if (g3 >= 3) pool.push(c);                       // 终极门控：三张三星成长
       }
     }
     for (let i = pool.length - 1; i > 0; i--) {          // 相对随机：洗牌取前3
