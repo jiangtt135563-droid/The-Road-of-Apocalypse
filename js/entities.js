@@ -69,7 +69,7 @@
     const id = c2.getImageData(0, 0, cv.width, cv.height);
     const d = id.data, Wp = cv.width, Hp = cv.height;
     const label = new Int32Array(Wp * Hp).fill(-1);
-    let bestId = -1, bestBox = null, cur = 0;
+    let bestId = -1, bestBox = null, bestCount = 0, cur = 0;
     for (let i = 0; i < d.length; i += 4) {
       if (d[i + 3] < 10 || label[i] >= 0) continue;   // alpha≥10 视为内容
       let count = 0, minX = Wp, minY = Hp, maxX = 0, maxY = 0;
@@ -95,23 +95,29 @@
     out.getContext('2d').drawImage(cv, minX, minY, out.width, out.height, 0, 0, out.width, out.height);
     return out;
   }
+  const CACHE_V = Date.now();   // 资源版本参数：绕开浏览器缓存的旧失败响应
   for (const cls of ['warrior', 'archer', 'mage']) {
     WALK_FRAMES[cls] = [];
     let remaining = 4;
     const loadOne = i => {
-      const url = `assets/anim/base-${cls}/move-0${i + 1}.png`;
+      const url = `assets/anim/base-${cls}/move-0${i + 1}.png?v=${CACHE_V}`;   // 版本参数绕开旧缓存
       const img = new Image();
       let tries = 0;
       img.onload = () => {
-        try { WALK_FRAMES[cls][i] = processWalkFrame(img); } catch (e) { console.warn('walk frame fail', cls, i, e); }
+        try { WALK_FRAMES[cls][i] = processWalkFrame(img); } catch (e) { window.__walkErrs = (window.__walkErrs || []).concat(cls + '#' + i + ': ' + String(e && e.message || e)); console.warn('walk frame fail', cls, i, e); }
         if (--remaining <= 0) console.log('walk frames ready:', cls);
       };
-      img.onerror = () => { if (++tries <= 30) setTimeout(() => loadOne(i), 1200); };   // 素材后补时自动重试
+      img.onerror = () => { window.__walkErrs = (window.__walkErrs || []).concat(cls + '#' + i + ': load error'); if (++tries <= 30) setTimeout(() => loadOne(cls, i), 1200); };   // 素材后补时自动重试
       img.src = url;
       if (img.complete && img.naturalWidth) img.onload();   // 缓存秒载时 load 事件可能已错过
     };
     for (let i = 0; i < 4; i++) loadOne(i);
   }
+  // 自愈：每3秒扫描缺失帧自动补载（素材后补/临时失败/重试耗尽都能恢复）
+  setInterval(() => {
+    for (const cls of ['warrior', 'archer', 'mage'])
+      for (let i = 0; i < 4; i++) if (!WALK_FRAMES[cls][i]) loadOne(cls, i);
+  }, 3000);
 
   /* 一次性特效实例：从图集取一格绘制，随寿命淡出 */
   class FxSprite {
