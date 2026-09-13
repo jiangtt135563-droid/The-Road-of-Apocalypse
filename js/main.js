@@ -197,7 +197,8 @@
         world.player.cards[c.id] = lv;
         world.player.picks++;
         world.player.takenCards.push({ id: c.id, label: c.name + starSuffix(c, lv) });
-        if (c.type === 'core') {   // 流派觉醒：变身影
+        if (c.type === 'core') {   // 流派觉醒：光束落下降 + 变身过渡
+          world.player.startTransform();
           world.addFloat(world.player.x, world.player.y - 64, '流派觉醒：' + SCHOOLS[c.school].name, '#ffd54f', 24, 1.8);
           toast('流派觉醒：' + SCHOOLS[c.school].name);
         }

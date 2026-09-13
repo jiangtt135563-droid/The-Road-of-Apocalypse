@@ -87,6 +87,13 @@
       this.windformT = 0;
       this.atkIdle = 0;
       this.facing = 1;                    // 立绘朝向：1右 / -1左
+      // 程序化动画状态
+      this.walkPhase = 0;                 // 移动步伐相位
+      this.idlePhase = 0;                 // 待机呼吸相位
+      this.atkAnim = 0;                   // 攻击动作计时（>0 播放中）
+      this.atkDir = { x: 1, y: 0 };       // 攻击方向
+      this.transformT = 0;                // 变身过渡剩余时间
+      this.transformDur = 1.15;
       this.takenCards = [];
       this.picks = 0;                     // 本局已选天启之力次数（上限 CONFIG.maxPicks）
     }
@@ -104,6 +111,13 @@
       let m = this.baseDamage;
       if (s.knight.lowBonus && s.hp / s.maxHp <= s.knight.lowAt) m *= 1 + s.knight.lowBonus;
       return m;
+    }
+
+    // 变身过渡：光束落下 → 新形态显现（选定流派核心时触发）
+    startTransform(dur = 1.15) {
+      this.transformDur = dur;
+      this.transformT = dur;
+      this.protectT = Math.max(this.protectT, 1.2);   // 变身期间短暂保护
     }
 
     gainXp(v, world) {
@@ -159,6 +173,11 @@
       if (this.rebirthCd > 0) this.rebirthCd -= dt;
       if (this.fx > 0) this.fx -= dt;
       if (this.windformT > 0) this.windformT -= dt;
+      if (this.atkAnim > 0) this.atkAnim -= dt;
+      if (this.transformT > 0) this.transformT -= dt;
+      // 程序化动画相位：移动步伐 / 待机呼吸
+      this.idlePhase += dt * 2.4;
+      if (this.moving) this.walkPhase += dt * 11;
       // 护盾：破裂延迟重铸 / 脱战恢复（血战不退加速）
       if (s.shieldMax > 0) {
         if (this.shield <= 0 && s.knight.recast > 0) {
@@ -255,7 +274,12 @@
 
     doAttack(world, t) {
       const k = this.poseKey;
-      if (t) this.facing = t.x >= this.x ? 1 : -1;   // 攻击转向
+      if (t) {
+        this.facing = t.x >= this.x ? 1 : -1;   // 攻击转向
+        const dx = t.x - this.x, dy = t.y - this.y, d = Math.hypot(dx, dy) || 1;
+        this.atkDir = { x: dx / d, y: dy / d };
+        this.atkAnim = 0.18;                     // 攻击动作：突进+前倾+挥击
+      }
       if (k === 'warrior') {
         this.fx = 0.18;
         const dmg = this.meleeDmg();
@@ -352,16 +376,81 @@
         ctx.fillStyle = 'rgba(179,229,252,.25)';
         ctx.beginPath(); ctx.arc(x, y, this.radius + 14, 0, 7); ctx.fill();
       }
-      // 立绘：基础形象随姿态，选定流派后变身影；朝向左右翻转；未加载时回退占位色块
+      // 立绘：程序化动画——移动步伐起伏/行走摆动、待机呼吸、攻击突进+挥击弧光、变身光束过渡
       const sprKey = this.stats.core || this.poseKey;
       const img = SPRITES[sprKey];
       if (img && img.complete && img.naturalWidth) {
         const h = this.radius * 3.0, w2 = h * (img.naturalWidth / img.naturalHeight);
-        ctx.save();
-        ctx.translate(x, y);
-        if (this.facing < 0) ctx.scale(-1, 1);
-        ctx.drawImage(img, -w2 / 2, -h / 2 - this.radius * 0.3, w2, h);
-        ctx.restore();
+        const R = this.radius, top = -h / 2 - R * 0.3;
+        let bob = 0, rot = 0, sx = 1, sy = 1, ox = 0, oy = 0;
+        if (this.moving) {
+          bob = -Math.abs(Math.sin(this.walkPhase)) * R * 0.2;           // 步伐起伏
+          rot = Math.sin(this.walkPhase) * 0.05;                          // 行走摆动
+          sx = 1 + Math.sin(this.walkPhase * 2) * 0.035;                  // 迈步伸缩
+        } else {
+          bob = Math.sin(this.idlePhase) * R * 0.05;                      // 待机呼吸
+          sy = 1 + Math.sin(this.idlePhase) * 0.02;
+        }
+        if (this.atkAnim > 0) {                                           // 攻击动作：向目标突进+前倾
+          const k = this.atkAnim / 0.18;
+          ox = this.atkDir.x * Math.sin(k * Math.PI) * R * 0.5;
+          oy = this.atkDir.y * Math.sin(k * Math.PI) * R * 0.3;
+          rot += (this.facing > 0 ? -1 : 1) * k * 0.14;
+          sx *= 1 + k * 0.1; sy *= 1 - k * 0.06;
+        }
+        if (this.transformT > 0) {
+          // ===== 变身过渡：光束自天而降扫落 → 角色从光中显现 → 白闪+过冲弹出 =====
+          const dur = this.transformDur || 1.15;
+          const prog = 1 - this.transformT / dur;
+          if (prog < 0.45) {
+            const q = prog / 0.45;
+            const beamBottom = y - h + h * q;
+            const grad = ctx.createLinearGradient(0, y - h * 2.4, 0, beamBottom);
+            grad.addColorStop(0, 'rgba(255,240,180,0)');
+            grad.addColorStop(0.65, 'rgba(255,235,170,.5)');
+            grad.addColorStop(1, 'rgba(255,255,255,.95)');
+            ctx.fillStyle = grad;
+            const bw = R * 1.6;
+            ctx.fillRect(x - bw / 2, y - h * 2.4, bw, beamBottom - (y - h * 2.4));
+            ctx.fillStyle = `rgba(255,240,190,${0.25 + 0.3 * q})`;
+            ctx.beginPath(); ctx.ellipse(x, y + R * 0.9, R * (0.9 + q), R * 0.32, 0, 0, 7); ctx.fill();
+          } else {
+            const q = (prog - 0.45) / 0.55;
+            const sc = (1 + 0.3 * (1 - q)) * (this.facing < 0 ? -1 : 1);
+            ctx.save();
+            ctx.translate(x + ox, y + bob + oy);
+            ctx.scale(sc, Math.abs(sc) * (1 - 0.08 * (1 - q)));
+            if (q < 1) ctx.filter = `brightness(${1 + (1 - q) * 2.2})`;
+            ctx.beginPath();
+            ctx.rect(-w2, top - 4, w2 * 2, h * (0.1 + 0.9 * q) + 4);
+            ctx.clip();
+            ctx.drawImage(img, -w2 / 2, top, w2, h);
+            ctx.filter = 'none';
+            ctx.restore();
+            ctx.strokeStyle = `rgba(255,240,190,${0.7 * (1 - q)})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(x + ox, y + oy, R * (0.8 + q * 1.7), 0, 7); ctx.stroke();
+          }
+        } else {
+          // 常规绘制
+          ctx.save();
+          ctx.translate(x + ox, y + bob + oy);
+          if (this.facing < 0) ctx.scale(-sx, sy); else ctx.scale(sx, sy);
+          ctx.rotate(rot);
+          ctx.drawImage(img, -w2 / 2, top, w2, h);
+          ctx.restore();
+          // 攻击挥击弧光（世界坐标，跟随攻击方向）
+          if (this.atkAnim > 0) {
+            const k = this.atkAnim / 0.18;
+            ctx.save();
+            ctx.translate(x + ox, y + bob + oy);
+            ctx.rotate(Math.atan2(this.atkDir.y, this.atkDir.x));
+            ctx.strokeStyle = `rgba(255,255,255,${0.7 * k})`;
+            ctx.lineWidth = 1 + 3.5 * k;
+            ctx.beginPath(); ctx.arc(0, 0, R * 1.55, -1, 1); ctx.stroke();
+            ctx.restore();
+          }
+        }
       } else {
         // 占位色块回退
         ctx.beginPath(); ctx.arc(x, y, this.radius, 0, 7);
