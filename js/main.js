@@ -134,7 +134,7 @@
     hudTimer.textContent = fmtTime(world.time);
     hudKills.textContent = '击杀 ' + world.kills;
     hudPose.textContent = p.pose.name + (st.core ? '·' + SCHOOLS[st.core].name : '');
-    hudMap.textContent = world.map.name + ' ' + (world.levelIdx + 1);
+    hudMap.textContent = `第${world.levelNo}关 · ${world.map.name}`;
     if (world.boss && !world.boss.dead) {
       bossBar.classList.remove('hidden');
       bossFill.style.width = Math.max(0, world.boss.hp / world.boss.maxHp * 100) + '%';
@@ -211,26 +211,31 @@
     cardModal.classList.remove('hidden');
   }
 
+  /* ---------- 天梯进度 ---------- */
+  const Ladder = {
+    get cleared() { return +localStorage.getItem('tqz-ladder-cleared') || 0; },
+    clear(n) { if (n > this.cleared) localStorage.setItem('tqz-ladder-cleared', n); },
+    unlocked(n) { return n <= this.cleared + 1; },
+  };
+
   /* ---------- 结算 ---------- */
   world.onEnd = result => {
     joy.active = false;
     $('settle-title').textContent = result === 'win' ? '征程告捷' : '征程未竟';
     const p = world.player;
-    // 下一关：本图下一关，或下一张图第1关
     let next = null;
     if (result === 'win') {
-      const mi = CONFIG.maps.indexOf(world.map);
-      if (world.levelIdx + 1 < world.map.levels) next = { mapKey: world.map.key, li: world.levelIdx + 1 };
-      else if (mi + 1 < CONFIG.maps.length) next = { mapKey: CONFIG.maps[mi + 1].key, li: 0 };
+      Ladder.clear(world.levelNo);
+      if (world.levelNo < CONFIG.ladder.levels) next = { n: world.levelNo + 1 };
     }
     const btnNext = $('btn-next');
     if (next) {
       btnNext.classList.remove('hidden');
-      btnNext.textContent = `下一关 ▶ ${CONFIG.maps.find(m => m.key === next.mapKey).name} ${next.li + 1}`;
-      btnNext.onclick = () => { world.mapKey = next.mapKey; world.levelIdx = next.li; startRun(); };
+      btnNext.textContent = `下一关 ▶ 第${next.n}关 ${CONFIG.mapForLevel(next.n).name}`;
+      btnNext.onclick = () => { world.levelNo = next.n; startRun(); };
     } else btnNext.classList.add('hidden');
     $('settle-stats').innerHTML =
-      `<div class="stat"><span>地图关卡</span><b>${world.map.name} ${world.levelIdx + 1}</b></div>` +
+      `<div class="stat"><span>天梯关卡</span><b>第${world.levelNo}关 · ${world.map.name}</b></div>` +
       `<div class="stat"><span>天启之姿</span><b>${p.pose.name}${p.stats.core ? '·' + SCHOOLS[p.stats.core].name : ''}</b></div>` +
       `<div class="stat"><span>用时</span><b>${fmtTime(world.time)}</b></div>` +
       `<div class="stat"><span>击杀</span><b>${world.kills}</b></div>` +
@@ -302,19 +307,21 @@
   }
   function renderMapList() {
     const box = $('map-list'); box.innerHTML = '';
-    CONFIG.maps.forEach((m, mi) => {
-      const row = document.createElement('div'); row.className = 'map-row';
-      const name = document.createElement('div'); name.className = 'map-name';
-      name.innerHTML = `<span class="map-dot" style="background:${m.palette.ground}"></span>${m.name}`;
-      const lvs = document.createElement('div'); lvs.className = 'map-lvs';
-      for (let li = 0; li < m.levels; li++) {
-        const b = document.createElement('button');
-        b.className = 'lv-btn'; b.textContent = (mi + 1) + '-' + (li + 1);
-        b.onclick = () => { world.mapKey = m.key; world.levelIdx = li; mapModal.classList.add('hidden'); startRun(); };
-        lvs.appendChild(b);
+    const cleared = Ladder.cleared;
+    $('ladder-progress').textContent = `已通关 ${Math.min(cleared, CONFIG.ladder.levels)} / ${CONFIG.ladder.levels} 关`;
+    for (let n = 1; n <= CONFIG.ladder.levels; n++) {
+      const b = document.createElement('button');
+      const map = CONFIG.mapForLevel(n);
+      const state = n <= cleared ? 'done' : (Ladder.unlocked(n) ? 'next' : 'locked');
+      b.className = 'lv-btn ' + state;
+      b.innerHTML = `<b>${n}</b><small>${map.name}</small>`;
+      if (state !== 'locked') {
+        b.onclick = () => { world.levelNo = n; mapModal.classList.add('hidden'); startRun(); };
+      } else {
+        b.disabled = true;
       }
-      row.appendChild(name); row.appendChild(lvs); box.appendChild(row);
-    });
+      box.appendChild(b);
+    }
   }
 
   /* ---------- 背包：角色独立装备、分类、详情与锻造 ---------- */

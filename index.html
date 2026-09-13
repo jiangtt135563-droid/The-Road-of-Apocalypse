@@ -40,14 +40,14 @@
     </div>
 
     <button id="btn-start">踏入征程</button>
-    <div id="home-hint">v0.2 占位框架：摄像机大地图 / 4主题地图×3关 / 月牙剑气 / 六流派，美术后续替换</div>
+    <div id="home-hint">v0.2 天梯闯关：100关·4主题轮换 / 摄像机大地图 / 六流派变身立绘 / 奥义解锁</div>
   </div>
 
   <!-- ===== 游戏 HUD 层 ===== -->
   <div id="game-ui" class="hidden">
     <div id="hud-top">
       <div class="hud-block" id="hud-pose">战士</div>
-      <div class="hud-block" id="hud-map">草原 1</div>
+      <div class="hud-block" id="hud-map">第1关 · 草原</div>
       <div class="hud-block" id="hud-timer">00:00</div>
       <div class="hud-block" id="hud-kills">击杀 0</div>
       <button class="hud-block" id="btn-pause">暂停</button>
@@ -94,11 +94,12 @@
     <button class="panel-btn" id="btn-pose-close">确认</button>
   </div>
 
-  <!-- ===== 地图关卡（占位：4图×3关） ===== -->
+  <!-- ===== 天梯关卡（100关） ===== -->
   <div id="map-modal" class="modal hidden">
-    <div class="modal-title">地图关卡</div>
+    <div class="modal-title">天梯闯关</div>
+    <div id="ladder-progress">已通关 0 / 100 关</div>
     <div id="map-list"></div>
-    <div class="modal-tip">怪物强度随地图与关卡成长；全部开放中（解锁规则待定）</div>
+    <div class="modal-tip">每25关轮换一片主题地图 · 通关解锁下一关 · 怪物强度随关卡成长</div>
     <button class="panel-btn ghost" id="btn-map-close">关闭</button>
   </div>
 

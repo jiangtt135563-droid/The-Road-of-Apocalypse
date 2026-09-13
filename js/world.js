@@ -20,16 +20,15 @@
       this.spawnTimer = 0; this.idleRespawn = 0; this.sinceElite = 0;
       this.bossSpawned = false; this.boss = null;
       this.onLevelUp = null; this.onEnd = null;
-      this.mapKey = CONFIG.maps[0].key;   // 当前地图
-      this.levelIdx = 0;                  // 当前关（0起）
+      this.levelNo = 1;                   // 天梯关卡号（1起，共 CONFIG.ladder.levels 关）
       this.cam = { x: 0, y: 0 };
       this.debugInvincible = false;
       this.lockHeld = false; this.lockPointerId = null; this.lockMark = null;  // 第二指锁头
       this.reset('idle');
     }
 
-    get map() { return CONFIG.maps.find(m => m.key === this.mapKey) || CONFIG.maps[0]; }
-    bossTime() { return L.bossTime + this.levelIdx * 8; }
+    get map() { return CONFIG.mapForLevel(this.levelNo); }
+    bossTime() { return L.bossTime; }
 
     reset(mode) {
       this.mode = mode;
@@ -104,11 +103,12 @@
       }
       let hpScale = 1, dmgScale = 1;
       if (this.mode === 'play') {
-        const st = CONFIG.levelMul(CONFIG.maps.indexOf(this.map), this.levelIdx);
+        const st = CONFIG.levelMul(this.levelNo);
         hpScale = st.hp * (1 + this.time / this.bossTime() * 0.4);
         dmgScale = st.dmg;
       }
       const mon = new Monster(type, x, y, hpScale, dmgScale);
+      if (this.mode === 'play') mon.speed *= CONFIG.ladder.speed(this.levelNo);
       this.monsters.push(mon);
       if (type === 'boss') {
         this.bossSpawned = true; this.boss = mon;
