@@ -190,10 +190,10 @@
     apply(p,w,lv){ const d=A([.12,.20,.30],lv)-(lv>1?A([.12,.20,.30],lv-1):0); p.stats.eliteDmg+=d; } },
   ];
 
-  // 三选一抽卡（v0.2.3 规则）：
-  // 1) 一关最多选15次（CONFIG.maxPicks），第1次必出本姿态双核心+1通用，核心一次性选定不再出现；
-  // 2) 之后每次从[未满星流派成长 + 未满星通用]中相对随机取3，特化与通用穿插出现，不偏向先后；
-  // 3) 满星卡不再刷出；终极进化门控：三张流派成长卡升至三星后解锁刷出资格（计入15次）。
+  // 三选一抽卡（v0.2.6 规则，用户 2026-09-13 定案）：
+  // 1) 一关常规选择上限15次（CONFIG.maxPicks）：第1次必出双核心+1通用，核心一次性选定；
+  // 2) 之后从未满星流派成长+未满星通用中相对随机取3，满星移出卡池，终极不进常规池；
+  // 3) 15次选满后，若已集齐三张三星流派成长卡，则第16次升级触发"奥义专属选择"：面板仅一张紫色奥义卡。
   window.drawCards = function (p) {
     const lv = id => p.cards[id] || 0;
     const cores = CARDS.filter(c => c.type === 'core' && SCHOOLS[c.school].stance === p.poseKey);
@@ -202,15 +202,19 @@
       const gens = CARDS.filter(c => c.type === 'generic' && lv(c.id) < c.stars);
       return [...cores, gens[Math.floor(Math.random() * gens.length)]];
     }
+    // 第16次特殊选：仅奥义（需三张三星成长，且未持有）
+    if (p.picks >= CONFIG.maxPicks) {
+      const ult = CARDS.find(c => c.type === 'ult' && c.school === ownedCore.school);
+      const g3 = CARDS.filter(x => x.type === 'growth' && x.school === ownedCore.school && lv(x.id) >= 3).length;
+      if (ult && !lv(ult.id) && g3 >= 3) return [ult];
+      return [];
+    }
     const pool = [];
     for (const c of CARDS) {
       if (lv(c.id) >= c.stars) continue;                 // 满星卡不再刷出
       if (c.type === 'growth' && c.school === ownedCore.school) pool.push(c);
       else if (c.type === 'generic') pool.push(c);
-      else if (c.type === 'ult' && c.school === ownedCore.school && !lv(c.id)) {
-        const g3 = CARDS.filter(x => x.type === 'growth' && x.school === ownedCore.school && lv(x.id) >= 3).length;
-        if (g3 >= 3) pool.push(c);                       // 终极门控：三张三星成长
-      }
+      // 终极不进常规池：走第16次专属选择
     }
     for (let i = pool.length - 1; i > 0; i--) {          // 相对随机：洗牌取前3
       const j = Math.floor(Math.random() * (i + 1));

@@ -158,9 +158,9 @@
     requestAnimationFrame(() => requestAnimationFrame(() => homeUI.classList.remove('fade-out')));
   }
 
-  /* ---------- 天启之力：升级三选一（一关上限 CONFIG.maxPicks 次） ---------- */
+  /* ---------- 天启之力：升级三选一（常规上限15次+第16次奥义专属选） ---------- */
   let pendingChoices = 0;
-  world.onLevelUp = () => { if (world.player.picks < CONFIG.maxPicks) pendingChoices++; };
+  world.onLevelUp = () => { pendingChoices++; };   // 选满后由 openCards 判定空池自动跳过
   function openCards() {
     world.paused = true; joy.active = false;
     const choices = drawCards(world.player);
@@ -219,7 +219,7 @@
       `<div class="stat"><span>用时</span><b>${fmtTime(world.time)}</b></div>` +
       `<div class="stat"><span>击杀</span><b>${world.kills}</b></div>` +
       `<div class="stat"><span>等级</span><b>Lv.${p.level}</b></div>` +
-      `<div class="stat"><span>天启之力选择</span><b>${p.picks}/${CONFIG.maxPicks}</b></div>` +
+      `<div class="stat"><span>天启之力选择</span><b>${p.picks} 次</b></div>` +
       `<div class="stat cards"><span>获得天启之力</span><b>${p.takenCards.length ? p.takenCards.join('、') : '无'}</b></div>`;
     setTimeout(() => { if (world.over) settleModal.classList.remove('hidden'); }, 600);
   };
