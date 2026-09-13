@@ -300,6 +300,7 @@
     onMonsterKilled(m) {
       this.kills++;
       if (this.mode !== 'play') { this.idleRespawn = IDLE.respawnDelay; return; }
+      if (window.CollectionSystem) CollectionSystem.discover('monsters', m.type);
       const p = this.player;
       if (m.xp > 0) this.spawnGem(m.x, m.y, m.xp);
       if (window.InventorySystem) {

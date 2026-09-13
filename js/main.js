@@ -8,7 +8,7 @@
     cardModal = $('card-modal'), cardChoices = $('card-choices'),
     pauseModal = $('pause-modal'), settleModal = $('settle-modal'),
     poseModal = $('pose-modal'), mapModal = $('map-modal'), bagModal = $('bag-modal'),
-    shopModal = $('shop-modal'), toastEl = $('toast');
+    shopModal = $('shop-modal'), collectionModal = $('collection-modal'), toastEl = $('toast');
   let viewScale = 1;
 
   // 调试参数：?fast=N 加速（1-10）；?pose=warrior/archer/mage 指定初始姿态（正式包移除）
@@ -27,6 +27,7 @@
     if (!c) return 'no card: ' + id;
     const lv = (world.player.cards[id] || 0) + 1;
     c.apply(world.player, world, lv);
+    CollectionSystem.discover('cards', c.id);
     world.player.cards[id] = lv;
     world.player.takenCards.push(c.name + '★' + lv);
     return c.name + '★' + lv;
@@ -142,11 +143,12 @@
 
   /* ---------- 场景切换（无缝转场：主页UI淡出，画面不切换） ---------- */
   function closeModals() {
-    for (const m of [cardModal, pauseModal, settleModal, poseModal, mapModal, bagModal, shopModal]) m.classList.add('hidden');
+    for (const m of [cardModal, pauseModal, settleModal, poseModal, mapModal, bagModal, shopModal, collectionModal]) m.classList.add('hidden');
   }
   function startRun() {
     closeModals(); pendingChoices = 0;
     world.reset('play');
+    CollectionSystem.discover('maps', world.map.key);
     homeUI.classList.add('fade-out');
     setTimeout(() => { if (world.mode === 'play') homeUI.classList.add('hidden'); }, 650);
     gameUI.classList.remove('hidden');
@@ -184,6 +186,7 @@
         `<div class="card-next">${nextText}</div>`;
       d.onclick = () => {
         c.apply(world.player, world, lv);
+        CollectionSystem.discover('cards', c.id);
         world.player.cards[c.id] = lv;
         world.player.picks++;
         world.player.takenCards.push(c.name + '★' + lv);
@@ -268,6 +271,7 @@
       d.onclick = () => {
         world.player.setPose(po.key);
         world.player.resetRun();
+        CollectionSystem.discover('poses', po.key);
         renderPoseChoices();
         toast('已选择天启之姿：' + po.name + '（进关后由流派核心定向）');
       };
@@ -392,11 +396,39 @@
   }
   InventorySystem.setOnChange(kind => {
     updateCoins();
+    CollectionSystem.refreshOwnedItems(); updateCollectionDot();
     if (kind === 'equip' && world.mode === 'idle') world.player.resetRun();
   });
   $('bag-role-tabs').querySelectorAll('button').forEach(btn => btn.onclick = () => { bagRole = btn.dataset.bagRole; bagSelected = null; renderBag(); });
   $('bag-tabs').querySelectorAll('button').forEach(btn => btn.onclick = () => { bagTab = btn.dataset.bagTab; renderBag(); });
   updateCoins();
+
+  /* ---------- 图鉴：发现、筛选、详情与红点 ---------- */
+  let collectionTab = 'poses', collectionSelected = null;
+  function collectionTotals() {
+    return CollectionSystem.categories.reduce((a,c) => { const s=CollectionSystem.summary(c.key); a.found+=s.found; a.total+=s.total; return a; }, {found:0,total:0});
+  }
+  function updateCollectionDot() {
+    const hasNew = CollectionSystem.categories.some(c => CollectionSystem.entries(c.key).some(e => CollectionSystem.isNew(c.key,e.id)));
+    $('collection-dot').classList.toggle('hidden', !hasNew);
+  }
+  function renderCollection() {
+    const cs=CollectionSystem, foundOnly=$('collection-found-only').checked, summary=cs.summary(collectionTab), all=collectionTotals();
+    $('collection-total').textContent=`${all.found} / ${all.total}`; $('collection-progress').textContent=`发现 ${summary.found} / ${summary.total}`;
+    $('collection-tabs').innerHTML=cs.categories.map(c=>{const s=cs.summary(c.key);return `<button class="${c.key===collectionTab?'active':''}" data-collection-tab="${c.key}">${c.name}<br>${s.found}/${s.total}</button>`}).join('');
+    $('collection-tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{collectionTab=b.dataset.collectionTab;collectionSelected=null;renderCollection()});
+    let entries=cs.entries(collectionTab); if(foundOnly) entries=entries.filter(e=>cs.isDiscovered(collectionTab,e.id));
+    if(!entries.some(e=>e.id===collectionSelected)) collectionSelected=entries[0]&&entries[0].id;
+    $('collection-grid').innerHTML=entries.length?entries.map(e=>{const found=cs.isDiscovered(collectionTab,e.id),fresh=cs.isNew(collectionTab,e.id);return `<button class="collection-entry ${found?'':'locked'} ${e.id===collectionSelected?'selected':''}" data-entry="${e.id}"><b>${found?e.icon:'?'}</b><span>${found?e.name:'尚未发现'}</span>${fresh?'<em>NEW</em>':''}</button>`}).join(''):'<div class="bag-empty">暂无符合条件的记录</div>';
+    $('collection-grid').querySelectorAll('.collection-entry').forEach(b=>b.onclick=()=>{collectionSelected=b.dataset.entry;if(cs.isDiscovered(collectionTab,collectionSelected))cs.markSeen(collectionTab,collectionSelected);renderCollection();updateCollectionDot()});
+    const entry=cs.entries(collectionTab).find(e=>e.id===collectionSelected), detail=$('collection-detail');
+    if(!entry){detail.innerHTML='<div class="collection-locked">请选择一项记录</div>';return}
+    if(!cs.isDiscovered(collectionTab,entry.id)){detail.innerHTML=`<div class="collection-locked">尚未发现<br><small>线索：${entry.source}</small></div>`;return}
+    detail.innerHTML=`<div class="collection-detail-icon">${entry.icon}</div><div><h3>${entry.name}</h3><small>${entry.subtitle}</small><p>${entry.desc}</p><div class="collection-stats">${(entry.stats||[]).map(x=>`<span>${x}</span>`).join('')}</div></div><div class="collection-source">获取方式：${entry.source}</div>`;
+  }
+  CollectionSystem.discover('poses',world.player.poseKey,true); CollectionSystem.discover('maps',world.map.key,true); CollectionSystem.refreshOwnedItems();
+  CollectionSystem.setOnChange(()=>updateCollectionDot()); updateCollectionDot();
+  $('collection-found-only').onchange=renderCollection;
 
   $('btn-start').onclick = startRun;
   $('btn-map').onclick = () => { renderMapList(); mapModal.classList.remove('hidden'); };
@@ -407,6 +439,8 @@
   $('btn-bag-close').onclick = () => bagModal.classList.add('hidden');
   $('btn-shop').onclick = () => { renderShop(); shopModal.classList.remove('hidden'); };
   $('btn-shop-close').onclick = () => shopModal.classList.add('hidden');
+  $('btn-collection').onclick = () => { renderCollection(); collectionModal.classList.remove('hidden'); };
+  $('btn-collection-close').onclick = () => collectionModal.classList.add('hidden');
   $('btn-pause').onclick = togglePause;
   $('btn-resume').onclick = togglePause;
   $('btn-giveup').onclick = showHome;

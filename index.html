@@ -35,7 +35,7 @@
 
     <div id="home-bottom">
       <button class="big-block" id="btn-bag">背包</button>
-      <button class="big-block" data-todo>图鉴</button>
+      <button class="big-block" id="btn-collection">图鉴<span class="collection-dot hidden" id="collection-dot"></span></button>
       <button class="big-block" id="btn-shop">商城</button>
     </div>
 
@@ -120,6 +120,15 @@
     </section>
   </div>
 
+  <div id="collection-modal" class="modal collection-modal hidden">
+    <section class="collection-panel" aria-label="图鉴">
+      <header class="collection-header"><div><small>探索记录</small><h2>天启图鉴</h2></div><strong id="collection-total">0 / 0</strong><button class="bag-close" id="btn-collection-close">×</button></header>
+      <nav class="collection-tabs" id="collection-tabs"></nav>
+      <div class="collection-tools"><span id="collection-progress">发现 0 / 0</span><label><input type="checkbox" id="collection-found-only"> 仅看已发现</label></div>
+      <div class="collection-body"><div class="collection-grid" id="collection-grid"></div><aside class="collection-detail" id="collection-detail"></aside></div>
+    </section>
+  </div>
+
   <div id="toast" class="hidden"></div>
 
   <!-- ===== 测试悬浮球（正式包移除） ===== -->
@@ -138,6 +147,7 @@
 <script src="js/config.js"></script>
 <script src="js/inventory.js"></script>
 <script src="js/cards.js"></script>
+<script src="js/collection.js"></script>
 <script src="js/entities.js"></script>
 <script src="js/world.js"></script>
 <script src="js/main.js"></script>
