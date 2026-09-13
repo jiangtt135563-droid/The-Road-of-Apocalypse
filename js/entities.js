@@ -91,6 +91,7 @@
       this.walkPhase = 0;                 // 移动步伐相位
       this.idlePhase = 0;                 // 待机呼吸相位
       this.atkAnim = 0;                   // 攻击动作计时（>0 播放中）
+      this.atkDur = 0.18;                 // 当前攻击动作总时长（随攻击频率伸缩）
       this.atkDir = { x: 1, y: 0 };       // 攻击方向
       this.transformT = 0;                // 变身过渡剩余时间
       this.transformDur = 1.15;
@@ -229,7 +230,7 @@
       if (s.core === 'duanshou') this.updateGun(dt, world);
       else if (this.attackCd <= 0) {
         const t = this.acquireTarget(world);
-        if (t) { this.attackCd = this.attackInterval(t); this.doAttack(world, t); }
+        if (t) { const iv = this.attackInterval(t); this.attackCd = iv; this.doAttack(world, t, iv); }
         else this.attackCd = 0;
       }
     }
@@ -272,13 +273,15 @@
       return best;
     }
 
-    doAttack(world, t) {
+    doAttack(world, t, iv = 0.22) {
       const k = this.poseKey;
       if (t) {
         this.facing = t.x >= this.x ? 1 : -1;   // 攻击转向
         const dx = t.x - this.x, dy = t.y - this.y, d = Math.hypot(dx, dy) || 1;
         this.atkDir = { x: dx / d, y: dy / d };
-        this.atkAnim = 0.18;                     // 攻击动作：突进+前倾+挥击
+        // 动作时长随攻击频率伸缩（攻速越快动作越快，钳制在可读区间）
+        this.atkDur = Math.min(0.45, Math.max(0.1, iv * 0.8));
+        this.atkAnim = this.atkDur;
       }
       if (k === 'warrior') {
         this.fx = 0.18;
@@ -319,6 +322,10 @@
         if (this.attackCd <= 0) {
           const t = this.acquireTarget(world);
           if (t) {
+            this.facing = t.x >= this.x ? 1 : -1;
+            const dx = t.x - this.x, dy = t.y - this.y, d = Math.hypot(dx, dy) || 1;
+            this.atkDir = { x: dx / d, y: dy / d };
+            this.atkDur = this.atkAnim = 0.12;          // 双响节奏短促动作
             if (gs.mega) {                              // 终结双响：两管齐爆的宽扇面轰击
               gs.mega = false;
               const dir = Math.atan2(t.y - this.y, t.x - this.x);
@@ -335,7 +342,10 @@
       } else if (gs.phase === 'volley') {
         gs.t -= dt;
         if (gs.t <= 0) {
-          this.shootGun(world, this.acquireTarget(world), true, gs.lastFirst);
+          const t2 = this.acquireTarget(world);
+          if (t2) { const dx = t2.x - this.x, dy = t2.y - this.y, dd = Math.hypot(dx, dy) || 1; this.atkDir = { x: dx / dd, y: dy / dd }; }
+          this.atkDur = this.atkAnim = 0.12;
+          this.shootGun(world, t2, true, gs.lastFirst);
           this.enterReload(gs, g);
         }
       } else {                                            // 装填（移动加速）
@@ -383,6 +393,7 @@
         const h = this.radius * 3.0, w2 = h * (img.naturalWidth / img.naturalHeight);
         const R = this.radius, top = -h / 2 - R * 0.3;
         let bob = 0, rot = 0, sx = 1, sy = 1, ox = 0, oy = 0;
+        const ph = this.atkAnim > 0 ? 1 - this.atkAnim / (this.atkDur || 0.18) : 0;  // 攻击动作进度 0→1
         if (this.moving) {
           bob = -Math.abs(Math.sin(this.walkPhase)) * R * 0.2;           // 步伐起伏
           rot = Math.sin(this.walkPhase) * 0.05;                          // 行走摆动
@@ -391,12 +402,24 @@
           bob = Math.sin(this.idlePhase) * R * 0.05;                      // 待机呼吸
           sy = 1 + Math.sin(this.idlePhase) * 0.02;
         }
-        if (this.atkAnim > 0) {                                           // 攻击动作：向目标突进+前倾
-          const k = this.atkAnim / 0.18;
-          ox = this.atkDir.x * Math.sin(k * Math.PI) * R * 0.5;
-          oy = this.atkDir.y * Math.sin(k * Math.PI) * R * 0.3;
-          rot += (this.facing > 0 ? -1 : 1) * k * 0.14;
-          sx *= 1 + k * 0.1; sy *= 1 - k * 0.06;
+        if (this.atkAnim > 0) {                                           // 分职业攻击动作
+          const e = Math.sin(ph * Math.PI);
+          if (this.poseKey === 'warrior') {
+            // 抬手（向后仰）→ 落下（前倾劈砍）
+            const swing = ph < 0.45 ? -(ph / 0.45) * 0.3 : -0.3 + ((ph - 0.45) / 0.55) * 0.55;
+            rot += swing * (this.facing > 0 ? -1 : 1);
+            ox = this.atkDir.x * e * R * 0.5; oy = this.atkDir.y * e * R * 0.3;
+            sx *= 1 + e * 0.1; sy *= 1 - e * 0.06;
+          } else if (this.poseKey === 'archer') {
+            // 拉弓（向后拉）→ 松手（向前顶）
+            const pull = ph < 0.6 ? (1 - ph / 0.6) * 0.3 : -((ph - 0.6) / 0.4) * 0.18;
+            ox = -this.atkDir.x * pull * R; oy = -this.atkDir.y * pull * R;
+            rot += (ph < 0.6 ? 1 : -1) * 0.05 * (this.facing > 0 ? 1 : -1);
+          } else {
+            // 法师：抬手聚能升起 → 落手引爆
+            oy -= Math.sin(ph * Math.PI) * R * 0.3;
+            rot += Math.sin(ph * Math.PI) * 0.06 * (this.facing > 0 ? -1 : 1);
+          }
         }
         if (this.transformT > 0) {
           // ===== 变身过渡：光束自天而降扫落 → 角色从光中显现 → 白闪+过冲弹出 =====
@@ -439,16 +462,50 @@
           ctx.rotate(rot);
           ctx.drawImage(img, -w2 / 2, top, w2, h);
           ctx.restore();
-          // 攻击挥击弧光（世界坐标，跟随攻击方向）
-          if (this.atkAnim > 0) {
-            const k = this.atkAnim / 0.18;
-            ctx.save();
-            ctx.translate(x + ox, y + bob + oy);
-            ctx.rotate(Math.atan2(this.atkDir.y, this.atkDir.x));
-            ctx.strokeStyle = `rgba(255,255,255,${0.7 * k})`;
-            ctx.lineWidth = 1 + 3.5 * k;
-            ctx.beginPath(); ctx.arc(0, 0, R * 1.55, -1, 1); ctx.stroke();
+        }
+        // 分职业攻击特效
+        if (this.atkAnim > 0) {
+          const e = Math.sin(ph * Math.PI);
+          const base = Math.atan2(this.atkDir.y, this.atkDir.x);
+          if (this.poseKey === 'warrior') {
+            // 白剑扇形横扫：扇面随动作扫开，亮边为剑锋
+            const sweep = -1.05 + 2.1 * (1 - Math.pow(1 - ph, 2));
+            ctx.save(); ctx.translate(x + ox, y + bob + oy);
+            ctx.beginPath(); ctx.moveTo(0, 0);
+            ctx.arc(0, 0, R * 1.7, base - 1.05, base + sweep);
+            ctx.closePath();
+            ctx.fillStyle = `rgba(255,255,255,${0.3 * (1 - ph)})`;
+            ctx.fill();
+            ctx.strokeStyle = `rgba(255,255,255,${0.85 * (1 - ph * 0.4)})`;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath(); ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(base + sweep) * R * 1.7, Math.sin(base + sweep) * R * 1.7);
+            ctx.stroke();
             ctx.restore();
+          } else if (this.poseKey === 'archer') {
+            // 拉弓引导线 → 松手箭闪
+            ctx.save(); ctx.translate(x + ox, y + bob + oy);
+            ctx.rotate(base);
+            if (ph < 0.6) {
+              ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1.5;
+              ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(R * 1.1, 0); ctx.stroke();
+            } else {
+              const f = 1 - (ph - 0.6) / 0.4;
+              ctx.fillStyle = `rgba(255,255,255,${0.7 * f})`;
+              ctx.beginPath(); ctx.arc(R * 0.9, 0, 5 + 5 * f, 0, 7); ctx.fill();
+            }
+            ctx.restore();
+          } else {
+            // 法师：抬手聚能法环 → 落手引爆（颜色随流派）
+            const cx = x + this.atkDir.x * R * 0.8, cy = y + bob + oy + this.atkDir.y * R * 0.8;
+            const col = s.core === 'wushi' ? '176,106,224' : s.core === 'zhuixing' ? '255,138,80' : '127,178,255';
+            ctx.strokeStyle = `rgba(${col},${0.7 * e})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(cx, cy, R * (0.3 + 0.55 * ph), 0, 7); ctx.stroke();
+            if (ph > 0.85) {
+              ctx.fillStyle = `rgba(${col},${(ph - 0.85) / 0.15 * 0.5})`;
+              ctx.beginPath(); ctx.arc(cx, cy, R * 0.85, 0, 7); ctx.fill();
+            }
           }
         }
       } else {
