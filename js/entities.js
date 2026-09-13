@@ -495,7 +495,7 @@
       const img = SPRITES[sprKey];
       const walkFrames = WALK_FRAMES[this.poseKey];
       const framesReady = walkFrames && walkFrames.length === 4 && walkFrames.every(Boolean);
-      const useWalkCycle = framesReady && !this.stats.core && this.transformT <= 0;
+      const useWalkCycle = framesReady && this.transformT <= 0;   // 流派形态也复用基础行走帧（同主角身体）
       let frameIdx = 0;
       if (useWalkCycle) frameIdx = this.moving ? Math.floor(this.walkPhase / (Math.PI / 2)) % 4 : 0;
       const drawSrc = useWalkCycle ? walkFrames[frameIdx] : (img && img.complete && img.naturalWidth ? img : null);

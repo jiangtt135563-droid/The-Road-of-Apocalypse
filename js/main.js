@@ -173,8 +173,9 @@
   };
   function openCards() {
     world.paused = true; joy.active = false;
+    gameUI.classList.add('raised');   // HUD提到选卡面板之上：暂停按钮可用（回看已选）
     const choices = drawCards(world.player);
-    if (!choices.length) { world.paused = false; pendingChoices = 0; return; }   // 卡池抽空
+    if (!choices.length) { world.paused = false; pendingChoices = 0; gameUI.classList.remove('raised'); return; }   // 卡池抽空
     cardChoices.innerHTML = '';
     choices.forEach(c => {
       const lv = (world.player.cards[c.id] || 0) + 1;
@@ -204,7 +205,7 @@
         }
         pendingChoices--;
         if (pendingChoices > 0) openCards();
-        else { cardModal.classList.add('hidden'); world.paused = false; }
+        else { cardModal.classList.add('hidden'); gameUI.classList.remove('raised'); world.paused = false; }
       };
       cardChoices.appendChild(d);
     });
