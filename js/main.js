@@ -472,6 +472,7 @@
   $('btn-collection-close').onclick = () => collectionModal.classList.add('hidden');
   $('btn-pause').onclick = togglePause;
   $('btn-resume').onclick = togglePause;
+  $('btn-card-pause').onclick = togglePause;   // 选卡面板内也能打开暂停回看已选
   $('btn-giveup').onclick = showHome;
   $('btn-retry').onclick = startRun;
   $('btn-home').onclick = showHome;
