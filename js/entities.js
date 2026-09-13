@@ -58,6 +58,74 @@
     FX_SHEETS[name] = def;
   }
 
+  /* ==================== 行走帧动画（assets/anim/<class>/move-01..04） ==================== */
+  // 帧为黑底不透明图：加载时自动抠像（边缘泛洪去黑底 + 仅保留最大连通块去切片碎片）并裁剪
+  const WALK_FRAMES = {};   // classKey -> [处理后的canvas ×4]
+  function processWalkFrame(img) {
+    const cv = document.createElement('canvas');
+    cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+    const c2 = cv.getContext('2d');
+    c2.drawImage(img, 0, 0);
+    const id = c2.getImageData(0, 0, cv.width, cv.height);
+    const d = id.data, Wp = cv.width, Hp = cv.height;
+    const isBg = i => d[i] < 42 && d[i + 1] < 42 && d[i + 2] < 42;   // 近黑背景
+    // 1. 边缘泛洪抠黑底（保留角色内部的深色描边）
+    const stack = [];
+    for (let x = 0; x < Wp; x++) { stack.push(x, (Hp - 1) * Wp + x); }
+    for (let y = 0; y < Hp; y++) { stack.push(y * Wp, y * Wp + Wp - 1); }
+    while (stack.length) {
+      const i = stack.pop();
+      if (d[i + 3] === 0 || !isBg(i)) continue;
+      d[i + 3] = 0;
+      const x = i % Wp;
+      if (x > 0) stack.push(i - 1);
+      if (x < Wp - 1) stack.push(i + 1);
+      if (i >= Wp) stack.push(i - Wp);
+      if (i < Wp * (Hp - 1)) stack.push(i + Wp);
+    }
+    // 2. 只保留最大连通块（去除图集切片串入的相邻帧碎片）
+    const label = new Int32Array(Wp * Hp).fill(-1);
+    let bestId = -1, bestCount = 0, cur = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] === 0 || label[i] >= 0) continue;
+      let count = 0;
+      const st = [i]; label[i] = cur;
+      while (st.length) {
+        const j = st.pop(); count++;
+        const x = j % Wp;
+        if (x > 0) { if (d[(j - 1) * 4 + 3] > 0 && label[j - 1] < 0) { label[j - 1] = cur; st.push(j - 1); } }
+        if (x < Wp - 1) { if (d[(j + 1) * 4 + 3] > 0 && label[j + 1] < 0) { label[j + 1] = cur; st.push(j + 1); } }
+        if (j >= Wp) { if (d[(j - Wp) * 4 + 3] > 0 && label[j - Wp] < 0) { label[j - Wp] = cur; st.push(j - Wp); } }
+        if (j < Wp * (Hp - 1)) { if (d[(j + Wp) * 4 + 3] > 0 && label[j + Wp] < 0) { label[j + Wp] = cur; st.push(j + Wp); } }
+      }
+      if (count > bestCount) { bestCount = count; bestId = cur; }
+      cur++;
+    }
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 0 && label[i] !== bestId) d[i + 3] = 0;
+    c2.putImageData(id, 0, 0);
+    // 3. 裁剪到内容包围盒
+    let minX = Wp, minY = Hp, maxX = 0, maxY = 0;
+    for (let y = 0; y < Hp; y++) for (let x = 0; x < Wp; x++) {
+      if (d[(y * Wp + x) * 4 + 3] > 0) {
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+      }
+    }
+    const out = document.createElement('canvas');
+    out.width = Math.max(1, maxX - minX + 1); out.height = Math.max(1, maxY - minY + 1);
+    out.getContext('2d').drawImage(cv, minX, minY, out.width, out.height, 0, 0, out.width, out.height);
+    return out;
+  }
+  for (const cls of ['warrior', 'archer', 'mage']) {
+    WALK_FRAMES[cls] = [];
+    for (let i = 1; i <= 4; i++) {
+      const img = new Image();
+      img.src = `assets/anim/${cls}/move-0${i}.png`;
+      WALK_FRAMES[cls].push(null);   // 占位：处理完成前视为未就绪
+      img.onload = () => { try { WALK_FRAMES[cls][i - 1] = processWalkFrame(img); } catch (e) { console.warn('walk frame fail', cls, i, e); } };
+    }
+  }
+
   /* 一次性特效实例：从图集取一格绘制，随寿命淡出 */
   class FxSprite {
     constructor(sheet, cell, x, y, size, opts = {}) {
@@ -428,11 +496,19 @@
         ctx.fillStyle = 'rgba(179,229,252,.25)';
         ctx.beginPath(); ctx.arc(x, y, this.radius + 14, 0, 7); ctx.fill();
       }
-      // 立绘：程序化动画——移动步伐起伏/行走摆动、待机呼吸、攻击突进+挥击弧光、变身光束过渡
+      // 立绘：程序化动画——移动步伐起伏/待机呼吸、攻击突进+挥击弧光、变身光束过渡
+      // 基础职业（未选流派）用帧动画行走；流派形态暂用静态立绘（等待流派行走帧）
       const sprKey = this.stats.core || this.poseKey;
       const img = SPRITES[sprKey];
-      if (img && img.complete && img.naturalWidth) {
-        const h = this.radius * 4.4, w2 = h * (img.naturalWidth / img.naturalHeight);
+      const walkFrames = WALK_FRAMES[this.poseKey];
+      const framesReady = walkFrames && walkFrames.length === 4 && walkFrames.every(Boolean);
+      const useWalkCycle = framesReady && !this.stats.core && this.transformT <= 0;
+      let frameIdx = 0;
+      if (useWalkCycle) frameIdx = this.moving ? Math.floor(this.walkPhase / (Math.PI / 2)) % 4 : 0;
+      const drawSrc = useWalkCycle ? walkFrames[frameIdx] : (img && img.complete && img.naturalWidth ? img : null);
+      if (drawSrc || (img && img.complete && img.naturalWidth)) {
+        const src = drawSrc || img;
+        const h = this.radius * 4.4, w2 = h * (src.naturalWidth || src.width) / (src.naturalHeight || src.height);
         const R = this.radius, top = -h / 2 - R * 0.3;
         let bob = 0, rot = 0, sx = 1, sy = 1, ox = 0, oy = 0;
         const ph = this.atkAnim > 0 ? 1 - this.atkAnim / (this.atkDur || 0.18) : 0;  // 攻击动作进度 0→1
@@ -496,12 +572,12 @@
             ctx.beginPath(); ctx.arc(x + ox, y + oy, R * (0.8 + q * 1.7), 0, 7); ctx.stroke();
           }
         } else {
-          // 常规绘制
+          // 常规绘制（基础职业：行走帧循环；流派形态：静态立绘+呼吸）
           ctx.save();
           ctx.translate(x + ox, y + bob + oy);
           if (this.facing < 0) ctx.scale(-sx, sy); else ctx.scale(sx, sy);
           ctx.rotate(rot);
-          ctx.drawImage(img, -w2 / 2, top, w2, h);
+          ctx.drawImage(src, -w2 / 2, top, w2, h);
           ctx.restore();
         }
         // 分职业攻击特效
