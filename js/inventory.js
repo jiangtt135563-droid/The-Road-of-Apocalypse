@@ -23,7 +23,9 @@
     { id:'mat-ore', name:'黯铁矿', icon:'矿', category:'material', rarity:'common', desc:'普通怪和精英怪可能掉落，用于锻造护甲和武器。' },
     { id:'mat-hide', name:'荒兽皮', icon:'皮', category:'material', rarity:'common', desc:'怪物身上取得的坚韧材料。' },
     { id:'mat-crystal', name:'天启结晶', icon:'晶', category:'material', rarity:'epic', desc:'精英和最终怪物可能掉落的稀有材料。' },
-    { id:'use-potion', name:'生命药剂', icon:'药', category:'consumable', rarity:'rare', price:60,
+    { id:'use-attack-elixir', name:'攻击灵丹', icon:'丹', category:'consumable', rarity:'rare', price:5000,
+      desc:'购买即服用，全职业永久攻击力×1.1；重复购买按当前攻击力继续提升10%。' },
+    { id:'use-potion', name:'生命药剂（旧）', icon:'药', category:'consumable', rarity:'rare',
       desc:'可重复购买的消耗品。（战斗中使用功能待接入）' },
   ];
   const RECIPES = [
@@ -36,7 +38,7 @@
   const STAT_NAMES = { damage:'伤害', hp:'生命', attackSpeed:'攻速', moveSpeed:'移速', area:'范围', pickup:'拾取', damageReduce:'减伤' };
   const PERCENT_STATS = new Set(['damage','attackSpeed','area','pickup','damageReduce']);
   const emptyLoadouts = () => Object.fromEntries(POSES.map(p => [p, { weapon:null, armor:null, charm:null }]));
-  const defaults = { version:2, coins:500, quantities:{ 'eq-ironblade':1, 'mat-ore':4, 'use-potion':1 }, equippedByPose:emptyLoadouts() };
+  const defaults = { version:2, attackElixirs:0, coins:500, quantities:{ 'eq-ironblade':1, 'mat-ore':4 }, equippedByPose:emptyLoadouts() };
   defaults.equippedByPose.warrior.weapon = 'eq-ironblade';
 
   function get(id) { return ITEMS.find(x => x.id === id); }
@@ -67,7 +69,8 @@
       if (!raw) return migrateOld() || structuredClone(defaults);
       const quantities = {};
       Object.entries(raw.quantities || {}).forEach(([id, n]) => { if (get(id) && Number.isFinite(n) && n > 0) quantities[id] = Math.floor(n); });
-      return { version:2, coins:Math.max(0, Math.floor(Number(raw.coins) || 0)), quantities, equippedByPose:validLoadouts(raw.equippedByPose) };
+      const attackElixirs = Number.isSafeInteger(raw.attackElixirs) && raw.attackElixirs >= 0 ? raw.attackElixirs : 0;
+      return { version:2, attackElixirs, coins:Math.max(0, Math.floor(Number(raw.coins) || 0)), quantities, equippedByPose:validLoadouts(raw.equippedByPose) };
     } catch (_) { return structuredClone(defaults); }
   }
   let state = load(), onChange = null;
@@ -97,6 +100,10 @@
     const item = get(id);
     if (!item || !item.price || state.coins < item.price) return { ok:false, reason:'金币不足' };
     if (item.category === 'equipment' && owns(id)) return { ok:false, reason:'已经拥有' };
+    if (id === 'use-attack-elixir') {
+      state.coins -= item.price; state.attackElixirs++;
+      changed('attack-elixir'); return { ok:true, item };
+    }
     state.coins -= item.price; state.quantities[id] = count(id) + 1; changed('buy'); return { ok:true, item };
   }
   function canCraft(recipe) { return Object.entries(recipe.cost).every(([id, n]) => count(id) >= n); }
@@ -119,11 +126,11 @@
   function applyBonuses(player) {
     const s = player.stats, t = totals(player.poseKey);
     s.maxHp += t.hp || 0; s.hp = s.maxHp;
-    s.damageMul *= 1 + (t.damage || 0) / 100; s.rateMul *= 1 + (t.attackSpeed || 0) / 100;
+    s.damageMul *= (1 + (t.damage || 0) / 100) * Math.pow(1.1, state.attackElixirs); s.rateMul *= 1 + (t.attackSpeed || 0) / 100;
     s.moveSpeed += t.moveSpeed || 0; s.areaMul *= 1 + (t.area || 0) / 100;
     s.pickupMul *= 1 + (t.pickup || 0) / 100; s.dr = Math.min(.75, s.dr + (t.damageReduce || 0) / 100);
   }
-  function statText(stats) {
+  function statText(stats = {}) {
     return Object.entries(stats || {}).map(([key, value]) => `${STAT_NAMES[key]} +${value}${PERCENT_STATS.has(key) ? '%' : ''}`);
   }
   function power(pose) {

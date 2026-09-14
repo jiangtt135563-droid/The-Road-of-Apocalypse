@@ -30,7 +30,7 @@
     }
 
     get map() { return CONFIG.mapForLevel(this.levelNo); }
-    bossTime() { return L.bossTime; }
+    bossTime() { return this.bossCountdown; }
 
     reset(mode) {
       this.mode = mode;
@@ -47,6 +47,7 @@
       this.runLoot = { coins:0, items:{} };
       this.bossSpawned = false; this.boss = null;
       this.over = false; this.paused = false;
+      this.bossCountdown = null;
       this.spawnTimer = mode === 'play' ? 0.4 : 0;
       this.idleRespawn = 0;
       this.decor = genDecor(this.map.palette, this.worldW, this.worldH);
@@ -111,7 +112,8 @@
       let hpScale = 1, dmgScale = 1;
       if (this.mode === 'play') {
         const st = CONFIG.levelMul(this.levelNo);
-        hpScale = st.hp * (1 + this.time / this.bossTime() * 0.4);
+        const growth = Math.min(1, this.time / L.healthRampTime) * (this.levelNo <= 10 ? 0.2 : 0.4);
+        hpScale = (type === 'boss' ? st.boss : st.hp) * (1 + growth);
         dmgScale = st.dmg;
       }
       const mon = new Monster(type, x, y, hpScale, dmgScale);
@@ -146,6 +148,7 @@
       this.arrows.push(new Arrow(p.x, p.y, dir, {
         speed: CONFIG.poses.archer.base.projectileSpeed * (wf ? 2 : hot ? 1.25 : 1),
         damage: p.baseDamage * (wf ? 0.7 : 1),
+        windPrimary: s.core === 'zhufeng',
         maxDist: p.attackRange(),
         pierce: wf ? 3 : (hot ? 1 : 0),
         size: laser ? 4.5 : 7,
@@ -188,8 +191,8 @@
         const ang = dir + t * 2 * spread + (Math.random() * 0.06 - 0.03);
         this.arrows.push(new Arrow(p.x, p.y, ang, {
           speed: 480 + Math.random() * 120,
-          damage: p.baseDamage * dmgMul,
-          maxDist: 320, pierce: g.pierce + g.pierceAdd, falloff: g.falloff,
+          damage: p.baseDamage * dmgMul * (opt.isSecond ? g.secondMul : 1),
+          maxDist: p.attackRange(), pierce: g.pierce + g.pierceAdd, falloff: g.falloff,
           size: (6 + (g.bulletAdd || 0)) * s.areaMul,
           closeAt: g.closeAt, closeBonus: g.closeBonus, kb: 300,
           secondBonus: opt.isSecond ? g.secondBonus : 0, firstTarget: opt.firstTarget || null,
@@ -209,8 +212,8 @@
       const dir = Math.atan2(target.y - p.y, target.x - p.x);
       const mk = (dmgMul, offset) => {
         const o = {
-          damage: p.baseDamage * dmgMul * (charged ? q.chargeMul : 1) * (giant ? q.giantDmg : 1),
-          speed: q.speed, range: q.range,
+          damage: p.baseDamage * dmgMul * (charged ? q.chargeMul : 1) * (giant ? q.giantDmg * 1.8 : 1),
+          speed: q.speed, range: q.range * 1.4,
           width: (q.width + (charged ? q.width * 0.4 : 0) + (giant ? q.width : 0)) * s.areaMul,
           pierce: giant ? 99 : q.pierce + q.pierceAdd,
           falloff: giant ? 0 : q.falloff,
@@ -311,6 +314,10 @@
         const d = Math.hypot(m.x - p.x, m.y - p.y);
         if (d <= R + m.radius) {
           m.takeDamage(dmg * (m.type !== 'grunt' ? s.eliteDmg : 1), this);
+          if (!m.dead) {
+            m.burnT = 3;
+            m.burnDps = p.baseDamage * 0.3 * (m.type !== 'grunt' ? s.eliteDmg : 1);
+          }
           m.knockback(m.x - p.x, m.y - p.y, 380);
           hits.push({ x: m.x, y: m.y });
         }
@@ -343,7 +350,7 @@
         damage: p.baseDamage * g.per * 6,
         eliteMul: s.eliteDmg, color: '#ff7043',
         grenade: true,
-        onBoom: (w, sp) => w.spawnFx('gunner', 3, sp.x, sp.y, sp.o.radius * 2.6, { dur: 0.45 }),
+        onBoom: (w, sp) => w.spawnFx('gunner', 3, sp.x, sp.y, sp.o.radius * 2.6, { dur: 0.45, rot: Math.PI / 2 }),
       }));
     }
 
@@ -450,13 +457,19 @@
       } else {
         this.spawnTimer -= dt;
         if (this.spawnTimer <= 0 && this.monsters.length < L.maxMonsters) {
-          const batch = 1 + Math.floor(this.time / 18);
+          const easy = this.levelNo <= 10;
+          const cap = easy ? 24 + Math.floor((this.levelNo - 1) / 3) : L.maxMonsters;
+          const batch = Math.min(easy ? 3 : 6, 1 + Math.floor(this.time / (easy ? 35 : 18)), Math.max(0, cap - this.monsters.length));
           for (let i = 0; i < batch; i++) this.spawnMonster('grunt');
-          let interval = Math.max(0.45, L.spawnInterval - this.time * 0.006);
+          let interval = easy ? Math.max(0.85, 1.35 - this.time * 0.003) : Math.max(0.45, L.spawnInterval - this.time * 0.006);
           if (this.bossSpawned) interval *= 2;
           this.spawnTimer = interval;
         }
-        if (!this.bossSpawned && this.time >= this.bossTime()) this.spawnMonster('boss');
+        if (!this.bossSpawned && p.level >= L.bossLevel) {
+          if (this.bossCountdown == null) this.bossCountdown = L.bossDelay;
+          this.bossCountdown = Math.max(0, this.bossCountdown - dt);
+          if (this.bossCountdown <= 0) this.spawnMonster('boss');
+        }
       }
 
       for (const m of this.monsters) m.update(dt, this);

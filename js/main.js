@@ -130,7 +130,8 @@
       shieldText.textContent = '盾 ' + Math.ceil(p.shield) + '/' + st.shieldMax;
     } else shieldWrap.classList.add('hidden');
     xpFill.style.width = Math.min(100, p.xp / p.xpNeed * 100) + '%';
-    xpText.textContent = 'Lv.' + p.level;
+    xpText.textContent = 'Lv.' + p.level + (!world.bossSpawned && world.bossCountdown != null
+      ? ' · Boss ' + Math.ceil(world.bossCountdown) + '秒' : '');
     hudTimer.textContent = fmtTime(world.time);
     hudKills.textContent = '击杀 ' + world.kills;
     hudPose.textContent = p.pose.name + (st.core ? '·' + SCHOOLS[st.core].name : '');
@@ -272,8 +273,14 @@
       renderPauseCards();
       pauseModal.classList.remove('hidden');
     } else {
-      world.paused = false;
       pauseModal.classList.add('hidden');
+      // 从选卡界面进入暂停回看时，“继续征程”应返回选卡并继续冻结战斗；
+      // 只有当前没有待选天启之力，才真正恢复战斗。
+      if (!cardModal.classList.contains('hidden')) {
+        world.paused = true;
+        gameUI.classList.add('raised');
+      } else if (pendingChoices > 0) openCards();
+      else world.paused = false;
     }
   }
 
@@ -417,7 +424,7 @@
       const sold = item.category === 'equipment' && inv.owns(item.id);
       const role = item.poses && item.poses.length < 3 ? item.poses.map(x => BAG_POSES[x]).join('/') + '专用' : '全角色可用';
       return `<article class="shop-card ${item.rarity}"><div class="shop-icon">${item.icon}</div><div class="shop-copy"><b>${item.name}</b>
-        <small>${item.category === 'equipment' ? role : '消耗品 · 持有 ' + inv.count(item.id)}</small><p>${inv.statText(item.stats).join(' · ') || item.desc}</p></div>
+        <small>${item.category === 'equipment' ? role : item.id === 'use-attack-elixir' ? '购买即服用 · 已服用 ' + inv.state.attackElixirs + ' 次' : '消耗品 · 持有 ' + inv.count(item.id)}</small><p>${inv.statText(item.stats).join(' · ') || item.desc}</p></div>
         <button data-buy="${item.id}" ${sold || inv.state.coins < item.price ? 'disabled' : ''}>${sold ? '已拥有' : '金币 ' + item.price}</button></article>`;
     }).join('');
     $('shop-grid').querySelectorAll('[data-buy]').forEach(btn => btn.onclick = () => {
@@ -425,6 +432,7 @@
     });
   }
   InventorySystem.setOnChange(kind => {
+    if (kind === 'attack-elixir') world.player.stats.damageMul *= 1.1;
     updateCoins();
     CollectionSystem.refreshOwnedItems(); updateCollectionDot();
     if (kind === 'equip' && world.mode === 'idle') world.player.resetRun();

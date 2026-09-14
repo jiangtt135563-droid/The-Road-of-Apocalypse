@@ -58,6 +58,48 @@
     FX_SHEETS[name] = def;
   }
 
+  /* ==================== 基础职业与六流派移动图集（每张横排4帧） ==================== */
+  const WALK_SHEET_DEFS = {
+    warrior:  { file: 'assets/anim/base-warrior/move-atlas.png', scale: 0.95,  offsetY: 0 },
+    archer:   { file: 'assets/anim/base-archer/move-atlas.png',  scale: 0.86,  offsetY: 0 },
+    mage:     { file: 'assets/anim/base-mage/move-atlas.png',    scale: 1.00,  offsetY: 0 },
+    piaobo:   { file: 'assets/anim/piaobo/move-atlas.png',       scale: 0.985, offsetY: 0.068 },
+    zhongqi:  { file: 'assets/anim/zhongqi/move-atlas.png',      scale: 0.900, offsetY: 0.092 },
+    zhufeng:  { file: 'assets/anim/zhufeng/move-atlas.png',      scale: 1.246, offsetY: -0.051 },
+    duanshou: { file: 'assets/anim/duanshou/move-atlas.png',     scale: 1.026, offsetY: 0.047 },
+    zhuixing: { file: 'assets/anim/zhuixing/move-atlas.png',     scale: 0.983, offsetY: 0.135 },
+    wushi:    { file: 'assets/anim/wushi/move-atlas.png',        scale: 1.040, offsetY: 0.138 },
+  };
+  const WALK_SHEETS = {};
+  const WALK_ASSET_V = '20260914-2';
+  function loadWalkSheet(classKey, attempt = 0) {
+    const def = WALK_SHEETS[classKey];
+    const img = new Image();
+    let settled = false;
+    const accept = () => {
+      if (settled || !img.naturalWidth) return;
+      settled = true;
+      def.img = img; def.ready = true; def.error = null;
+    };
+    img.onload = accept;
+    img.onerror = () => {
+      if (settled) return;
+      settled = true;
+      if (attempt < 2) setTimeout(() => loadWalkSheet(classKey, attempt + 1), 500);
+      else {
+        def.error = 'load error';
+        window.__walkErrs = (window.__walkErrs || []).concat(classKey + ': load error');
+        console.warn('walk sheet load failed:', classKey, def.file);
+      }
+    };
+    img.src = `${def.file}?v=${WALK_ASSET_V}`;
+    if (img.complete && img.naturalWidth) queueMicrotask(accept);
+  }
+  for (const classKey in WALK_SHEET_DEFS) {
+    WALK_SHEETS[classKey] = { ...WALK_SHEET_DEFS[classKey], img: null, ready: false, error: null };
+    loadWalkSheet(classKey);
+  }
+
 
   /* 一次性特效实例：从图集取一格绘制，随寿命淡出 */
   class FxSprite {
@@ -113,7 +155,7 @@
                 rampCap: 0, rampPer: 0.04, rampStacks: 0 },
         // 火炮射手
         gun: { per: 1.9, reload: 1.7, pierce: 1, pierceAdd: 0, falloff: .2, closeAt: .35,
-               closeBonus: 0, secondMul: 1, secondBonus: 0, moveReload: 0, bulletAdd: 0, megaEvery: 0 },
+               closeBonus: 0, secondMul: 1, secondBonus: 0, moveReload: 0, reloadReduction: 0, bulletAdd: 0, megaEvery: 0 },
         // 坠星法师
         star: { dmgMul: 1.5, radius: 95, delay: .6, center: 0, frag: 0, follow: 0,
                 followMul: .6, giantEvery: 0, count: 0 },
@@ -143,10 +185,13 @@
     }
 
     get baseDamage() { return this.pose.base.damage * this.stats.damageMul; }
-    attackRange() { return this.pose.base.attackRange * this.stats.rangeMul; }
+    attackRange() {
+      if (this.stats.core === 'duanshou') return 320 * this.stats.rangeMul;
+      return this.pose.base.attackRange * this.stats.rangeMul * (this.stats.core === 'piaobo' ? 1.4 : 1);
+    }
     // 范围圈显示值：短铳流派用其独有短射程，其余用姿态射程（随射程加成同步变化）
     attackVisualRange() {
-      if (this.stats.core === 'duanshou') return 320;
+      if (this.stats.core === 'duanshou') return this.attackRange();
       return this.attackRange();
     }
     // 血战不退：低血提高近战伤害
@@ -169,7 +214,9 @@
       while (this.xp >= this.xpNeed) {
         this.xp -= this.xpNeed;
         this.level++;
-        this.xpNeed = CONFIG.level.xpBase + (this.level - 1) * CONFIG.level.xpGrowth;
+        this.xpNeed = (CONFIG.level.xpBase + (this.level - 1) * CONFIG.level.xpGrowth) * CONFIG.level.laterXpMultiplier;
+        if (world.mode === 'play' && this.level >= CONFIG.level.bossLevel && world.bossCountdown == null)
+          world.bossCountdown = CONFIG.level.bossDelay;
         this.stats.hp = Math.min(this.stats.maxHp, this.stats.hp + this.stats.maxHp * CONFIG.level.levelUpHeal);
         if (world.onLevelUp) world.onLevelUp();
       }
@@ -343,10 +390,6 @@
         }
       } else if (k === 'archer') {
         const wd = this.stats.wind;
-        if (wd.combo) {                                // 连珠不息
-          if (t === wd.comboTarget) wd.comboN = Math.min(wd.combo, wd.comboN + 1);
-          else { wd.comboTarget = t; wd.comboN = 0; }
-        }
         if (wd.rampCap) {                              // 连射叠层：越射越快
           this.atkIdle = 0;
           wd.rampStacks = Math.min(wd.rampCap, wd.rampStacks + 1);
@@ -374,11 +417,11 @@
               gs.mega = false;
               world.spawnGrenade(this);
               world.addFloat(this.x, this.y - 46, '榴弹炮击！', '#ffab91', 22);
-              this.enterReload(gs, g);
-            } else {
+            }
+            {
               this.shootGun(world, t, false, null);
               gs.lastFirst = t;
-              gs.phase = 'volley'; gs.t = 0.13;         // 第二发延迟
+              gs.phase = 'volley'; gs.t = 0.13 / this.stats.rateMul;
             }
           } else this.attackCd = 0;
         }
@@ -397,7 +440,7 @@
       }
     }
     enterReload(gs, g) {
-      gs.phase = 'reload'; gs.t = g.reload; gs.cycle++;
+      gs.phase = 'reload'; gs.t = g.reload * (1 - g.reloadReduction) / this.stats.rateMul; gs.cycle++;
       if (g.megaEvery && gs.cycle % g.megaEvery === 0) gs.mega = true;
     }
     shootGun(world, t, isSecond, firstTarget) {
@@ -429,13 +472,26 @@
         ctx.fillStyle = 'rgba(179,229,252,.25)';
         ctx.beginPath(); ctx.arc(x, y, this.radius + 14, 0, 7); ctx.fill();
       }
-      // 立绘：程序化动画——待机呼吸、攻击突进+挥击弧光、变身光束过渡
+      // 立绘：基础职业和六流派各用自己的4帧移动图集；待机、攻击和变身保留原程序化动画
       const sprKey = this.stats.core || this.poseKey;
       const img = SPRITES[sprKey];
-      if (img && img.complete && img.naturalWidth) {
-        const src = img;
-        const h = this.radius * 4.4, w2 = h * (src.naturalWidth || src.width) / (src.naturalHeight || src.height);
-        const R = this.radius, top = -h / 2 - R * 0.3;
+      const staticReady = img && img.complete && img.naturalWidth;
+      const requestedWalkSheet = WALK_SHEETS[sprKey];
+      // 流派图集未加载完成时维持流派待机图，避免短暂退回基础职业形象。
+      const walkSheet = requestedWalkSheet && requestedWalkSheet.ready
+        ? requestedWalkSheet
+        : (sprKey === this.poseKey ? WALK_SHEETS[this.poseKey] : null);
+      const useWalkCycle = !!(this.moving && this.transformT <= 0 &&
+        walkSheet && walkSheet.ready && walkSheet.img && walkSheet.img.naturalWidth);
+      const src = useWalkCycle ? walkSheet.img : (staticReady ? img : null);
+      const frameIdx = useWalkCycle ? Math.floor(this.walkPhase / 1.35) % 4 : 0;
+      if (src) {
+        const srcW = useWalkCycle ? src.naturalWidth / 4 : src.naturalWidth;
+        const srcH = src.naturalHeight;
+        const h = this.radius * 4.4 * (useWalkCycle ? walkSheet.scale : 1);
+        const w2 = h * srcW / srcH;
+        const R = this.radius;
+        const top = -h / 2 - R * 0.3 + (useWalkCycle ? R * (walkSheet.offsetY || 0) : 0);
         let bob = 0, rot = 0, sx = 1, sy = 1, ox = 0, oy = 0;
         const ph = this.atkAnim > 0 ? 1 - this.atkAnim / (this.atkDur || 0.18) : 0;  // 攻击动作进度 0→1
         if (this.moving) {
@@ -498,12 +554,16 @@
             ctx.beginPath(); ctx.arc(x + ox, y + oy, R * (0.8 + q * 1.7), 0, 7); ctx.stroke();
           }
         } else {
-          // 常规绘制（基础职业：行走帧循环；流派形态：静态立绘+呼吸）
+          // 常规绘制：对应职业或流派移动图集 / 静态立绘
           ctx.save();
           ctx.translate(x + ox, y + bob + oy);
           if (this.facing < 0) ctx.scale(-sx, sy); else ctx.scale(sx, sy);
           ctx.rotate(rot);
-          ctx.drawImage(src, -w2 / 2, top, w2, h);
+          if (useWalkCycle) {
+            const cellW = src.naturalWidth / 4;
+            ctx.drawImage(src, frameIdx * cellW, 0, cellW, src.naturalHeight,
+              -w2 / 2, top, w2, h);
+          } else ctx.drawImage(src, -w2 / 2, top, w2, h);
           ctx.restore();
         }
         // 分职业攻击特效
@@ -599,6 +659,7 @@
       this.touchCd = 0; this.hitFlash = 0; this.bashCd = 0;
       // 状态：中毒/易伤/减速/冰冻/反水/失序/疲态
       this.poisonStacks = 0; this.poisonT = 0; this.poisonDps = 0; this.poisonTick = 0;
+      this.burnT = 0; this.burnDps = 0;
       this.vulnT = 0; this.vulnAmt = 0;
       this.slowT = 0; this.slowPct = 0; this.slowStacks = 0;
       this.frozenT = 0; this.frozenCd = 0;
@@ -644,6 +705,12 @@
         this.kbx *= dec; this.kby *= dec;
         if (Math.abs(this.kbx) < 4) this.kbx = 0;
         if (Math.abs(this.kby) < 4) this.kby = 0;
+      }
+      if (this.burnT > 0) {
+        const burnDt = Math.min(dt, this.burnT);
+        this.burnT -= burnDt;
+        this.takeDamage(this.burnDps * burnDt, world, { silent: true });
+        if (this.dead) return;
       }
       // 中毒 tick
       if (this.poisonT > 0) {
@@ -734,6 +801,16 @@
       ctx.stroke();
       ctx.strokeStyle = this.color; ctx.lineWidth = 4;
       ctx.beginPath(); ctx.moveTo(x + r * 0.8, y - r * 0.5); ctx.lineTo(x + r * 0.8 + 10, y - r * 0.5 - 12); ctx.stroke();
+      // 倒戈蛊：小怪反水、精英失序、Boss疲态期间统一浅暗红覆盖。
+      if (this.charmT > 0 || this.disorderT > 0 || this.attackSlowT > 0) {
+        ctx.save();
+        ctx.fillStyle = ctx.strokeStyle = 'rgba(255,120,130,0.48)';
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(x + r * 0.8, y - r * 0.5);
+        ctx.lineTo(x + r * 0.8 + 10, y - r * 0.5 - 12); ctx.stroke();
+        ctx.restore();
+      }
       if (this.hp < this.maxHp && this.type !== 'boss') {
         ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(x - 20, y - r - 14, 40, 6);
         ctx.fillStyle = '#6fdd4e'; ctx.fillRect(x - 20, y - r - 14, 40 * Math.max(0, this.hp / this.maxHp), 6);
@@ -786,6 +863,11 @@
           if (o.secondBonus && o.firstTarget === m) dmg *= 1 + o.secondBonus;     // 第二声轰鸣
           if (o.falloff && this.hit.size > 1) dmg *= Math.pow(1 - o.falloff, this.hit.size - 1); // 穿透衰减
           m.takeDamage(dmg * (m.type !== 'grunt' ? o.eliteMul : 1), world);
+          if (o.windPrimary && p.stats.wind.combo) {
+            const wd = p.stats.wind;
+            if (m === wd.comboTarget) wd.comboN = Math.min(wd.combo, wd.comboN + 1);
+            else { wd.comboTarget = m; wd.comboN = 1; }
+          }
           if (o.aoeWitch) world.witchHit(m);              // 直击目标同样上毒
           if (o.aoeRadius) {
             // 元气波溅射（巫师）：以命中点为中心范围伤害并附加中毒
@@ -1047,6 +1129,5 @@
     return { palette, patches, grasses, trees };
   }
 
-  window.GameEntities = { Player, Monster, Arrow, SwordQi, Spell, Gem, FxSprite, drawText, genDecor };
+  window.GameEntities = { Player, Monster, Arrow, SwordQi, Spell, Gem, FxSprite, drawText, genDecor, WALK_SHEETS };
 })();
-

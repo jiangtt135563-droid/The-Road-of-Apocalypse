@@ -21,7 +21,7 @@
 
   /* ================= A. 战士 · 漂泊剑客 ================= */
   { id:'ZJ-01', name:'剑气初鸣', school:'piaobo', type:'core', stars:1,
-    desc:'挥剑时放出一道穿透剑气，近身可双倍命中',
+    desc:'挥剑时放出一道穿透剑气，近身可同时受到挥砍和剑气伤害',
     apply(p, w, lv){ p.stats.core='piaobo'; p.stats.qi.dmgMul=A([.6,.75,.9],lv); p.stats.qi.pierce=2+lv; } },
   { id:'ZJ-02', name:'破风剑势', school:'piaobo', type:'growth', stars:3,
     desc:'剑气飞得更远更快，宽度略微增加',
@@ -175,7 +175,7 @@
   { id:'TY-03', name:'迅击之律', school:null, type:'generic', stars:3,
     desc:'攻击与施法频率提高',
     next:{1:'频率+12%', 2:'频率+16%'},
-    apply(p,w,lv){ const s=p.stats; s.rateMul+=A([.08,.12,.16],lv)-(lv>1?A([.08,.12,.16],lv-1):0); if(s.core==='duanshou') s.gun.reload*=1-A([.06,.10,.14],lv)+(lv>1?A([.06,.10,.14],lv-1):0); } },
+    apply(p,w,lv){ const s=p.stats; s.rateMul+=A([.08,.12,.16],lv)-(lv>1?A([.08,.12,.16],lv-1):0); s.gun.reloadReduction=A([.06,.10,.14],lv); } },
   { id:'TY-04', name:'扩域刻印', school:null, type:'generic', stars:3,
     desc:'剑气/弹体/爆炸等范围变大',
     next:{1:'范围+15%', 2:'范围+20%'},
@@ -223,4 +223,3 @@
     return pool.slice(0, 3);
   };
 })();
-

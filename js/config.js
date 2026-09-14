@@ -55,9 +55,9 @@ window.CONFIG = {
     levels: 100,          // 当前关卡总数
     perMap: 25,           // 每张主题地图轮换的关数
     // 难度曲线（占位锚定：白板成型后约可通10关，11关起小怪伤害开始致命；经真实试玩后可微调三个系数）
-    hp(n)   { return 1 + 0.18*(n-1) + 0.012*(n-1)*(n-1); },
-    dmg(n)  { return 1 + 0.16*(n-1); },
-    boss(n) { return CONFIG.ladder.hp(n) * 1.6; },
+    hp(n)   { const late = Math.max(0, n - 10); return 0.8 + 0.05 * Math.min(9, n - 1) + 0.18 * late + 0.012 * late * late; },
+    dmg(n)  { return 0.75 + 0.035 * Math.min(9, n - 1) + 0.16 * Math.max(0, n - 10); },
+    boss(n) { return CONFIG.ladder.hp(n); }, // 实际接入；前十关不额外叠加Boss血量倍率
     speed(n){ return 1; },
   },
   mapForLevel(n) { return CONFIG.maps[Math.min(CONFIG.maps.length - 1, Math.floor((n - 1) / CONFIG.ladder.perMap))]; },
@@ -73,7 +73,10 @@ window.CONFIG = {
   level: {
     xpBase: 4, xpGrowth: 2,
     levelUpHeal: 0.3,
-    bossTime: 100,              // 开局 100 秒刷最终怪物（占位）
+    bossLevel: 13,
+    bossDelay: 40,              // 达到13级后，累计40秒战斗时间
+    healthRampTime: 100,        // 血量成长独立于Boss计时，并封顶
+    laterXpMultiplier: 2,
     spawnInterval: 1.1,
     maxMonsters: 40,
     eliteEvery: 25,
