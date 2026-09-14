@@ -4,9 +4,9 @@
 
 控制"天选者"走位，自动战斗清理怪群，升级时三选一"天启之力"构筑流派，击败最终怪物通关。
 
-## 在线试玩
+## 在线试玩（v0.3）
 
-部署成功后访问：<https://jiangtt135563-droid.github.io/The-Road-of-Apocalypse/>
+进入最新版本：<https://jiangtt135563-droid.github.io/The-Road-of-Apocalypse/>
 
 （手机、电脑浏览器均可，微信内直接打开）
 
